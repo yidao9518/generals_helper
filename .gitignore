@@ -1,0 +1,22 @@
+# JetBrains / IDE
+.idea/
+.vscode/
+
+# Node / JS
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Test / cache
+.pytest_cache/
+.nyc_output/
+
+# Logs / temp
+*.log
+*.tmp
+*.temp
+*.swp
+.DS_Store
+

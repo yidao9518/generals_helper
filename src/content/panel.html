@@ -1,0 +1,51 @@
+<style>
+  .gh-wrap {
+    margin: 0 8px 8px;
+    background: rgba(20,20,20,0.92);
+    color: #f5f5f5;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    overflow: hidden;
+  }
+  #gh-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+  }
+  .gh-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .gh-actions button {
+    padding: 1px 7px;
+    font-size: 10px;
+    cursor: pointer;
+  }
+  #gh-frames {
+    margin: 0;
+    padding: 10px;
+    overflow: auto;
+    max-height: 136px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+</style>
+<div class="gh-wrap">
+  <div id="gh-header">
+    <span id="gh-title">原始消息</span>
+    <span class="gh-actions">
+      <button id="gh-refresh">刷新</button>
+      <button id="gh-clear">清空</button>
+    </span>
+  </div>
+  <pre id="gh-frames">加载中...</pre>
+</div>
+

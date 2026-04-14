@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Generals Helper",
+  "description": "Capture generals.io websocket frames for local analysis.",
+  "version": "0.1.0",
+  "permissions": ["storage"],
+  "host_permissions": ["*://*.generals.io/*"],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.generals.io/*"],
+      "js": ["src/content/content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "Generals Helper",
+    "default_popup": "src/popup/popup.html"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["src/injected/ws-hook.js", "src/shared/battle-analyzer.js", "src/shared/battle-debug.js", "src/shared/runtime-message.js", "src/content/frame-view.js", "src/content/panel.html"],
+      "matches": ["*://*.generals.io/*"]
+    }
+  ]
+}
+

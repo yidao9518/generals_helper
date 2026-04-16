@@ -1,9 +1,13 @@
-const BRIDGE_SOURCE = "generals-helper-ws-hook";
-const PANEL_ID = "generals-helper-panel-root";
-const REFRESH_MS = 1500;
-const INIT_FLAG = "__generalsHelperContentInitialized";
-const MODE_RAW = "raw";
-const MODE_BATTLE = "battle";
+import {
+  BATTLE_DISPLAY_CONFIG,
+  BRIDGE_SOURCE,
+  INIT_FLAG,
+  MODE_BATTLE,
+  MODE_RAW,
+  PANEL_ID,
+  REFRESH_MS
+} from "../shared/helper-config.js";
+
 const PANEL_TEMPLATE_URL = chrome.runtime.getURL("src/content/panel.html");
 
 const runtimeMessagePromise = import(chrome.runtime.getURL("src/shared/runtime-message.js"));
@@ -21,14 +25,7 @@ let panelRefresh = null;
 let displayMode = MODE_RAW;
 let autoRefreshEnabled = true;
 
-const CONTENT_BATTLE_DISPLAY_CONFIG = {
-  showTurn: true,
-  showPlayers: false,
-  showMapDiff: true,
-  showCitiesDiff: false,
-  showDesertsDiff: false,
-  showDebug: false
-};
+const CONTENT_BATTLE_DISPLAY_CONFIG = { ...BATTLE_DISPLAY_CONFIG };
 
 function getFrameViewModule() {
   if (!frameViewPromise) {
@@ -96,8 +93,8 @@ function ensurePanelMounted() {
 
 function injectWsHook() {
   const script = document.createElement("script");
+  script.type = "module";
   script.src = chrome.runtime.getURL("src/injected/ws-hook.js");
-  script.async = false;
   (document.head || document.documentElement).appendChild(script);
   script.remove();
 }

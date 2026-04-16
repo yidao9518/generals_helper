@@ -1,5 +1,6 @@
 import { buildBattleMapState, isPositiveInteger } from "./battle-map-state.js";
 import { applySkipCountMapDiff, formatBattleUpdateMapDiff, parseSkipCountMapDiff } from "./battle-map-diff.js";
+import { BATTLE_DISPLAY_CONFIG } from "./helper-config.js";
 
 export { buildBattleMapState, parseSkipCountMapDiff, applySkipCountMapDiff };
 
@@ -125,13 +126,14 @@ export function formatBattleUpdate(update, displayConfig = {}, battleMapState = 
     return "";
   }
 
+  const resolvedConfig = displayConfig || {};
   const {
-    showTurn = true,
-    showPlayers = false,
-    showMapDiff = true,
-    showCitiesDiff = false,
-    showDesertsDiff = false
-  } = displayConfig;
+    showTurn = BATTLE_DISPLAY_CONFIG.showTurn,
+    showPlayers = BATTLE_DISPLAY_CONFIG.showPlayers,
+    showMapDiff = BATTLE_DISPLAY_CONFIG.showMapDiff,
+    showCitiesDiff = BATTLE_DISPLAY_CONFIG.showCitiesDiff,
+    showDesertsDiff = BATTLE_DISPLAY_CONFIG.showDesertsDiff
+  } = resolvedConfig;
 
   const parts = [];
 

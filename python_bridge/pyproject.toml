@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "generals-helper-python-bridge"
+version = "0.1.0"
+description = "Local HTTP/HTTPS bridge for Generals Helper"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["cryptography>=42.0.0"]
+license = { text = "MIT" }
+keywords = ["generals.io", "chrome-extension", "http", "https", "analysis"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+
+[project.scripts]
+generals-helper-bridge = "python_bridge.server:main"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["python_bridge*"]
+

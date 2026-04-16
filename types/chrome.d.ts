@@ -19,14 +19,22 @@ declare namespace chrome {
 
     function sendMessage(message: any): Promise<any>;
     function getURL(path: string): string;
+    function openOptionsPage(): Promise<void>;
   }
 
   namespace tabs {
     interface Tab {
       id?: number;
+      url?: string;
+      active?: boolean;
+    }
+
+    interface CreateProperties {
+      url?: string;
     }
 
     function query(queryInfo: Record<string, any>): Promise<Tab[]>;
+    function create(createProperties: CreateProperties): Promise<Tab>;
     function sendMessage(tabId: number, message: any): Promise<any>;
   }
 

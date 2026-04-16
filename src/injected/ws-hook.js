@@ -1,10 +1,9 @@
-(() => {
-  if (window.__generalsHelperWsHookInstalled) {
-    return;
-  }
-  window.__generalsHelperWsHookInstalled = true;
+import { BRIDGE_SOURCE } from "../shared/helper-config.js";
 
-  const BRIDGE_SOURCE = "generals-helper-ws-hook";
+if (window.__generalsHelperWsHookInstalled) {
+  // no-op
+} else {
+  window.__generalsHelperWsHookInstalled = true;
   const NativeWebSocket = window.WebSocket;
 
   function capturePayload(payload) {
@@ -69,5 +68,5 @@
   Object.setPrototypeOf(WrappedWebSocket, NativeWebSocket);
 
   window.WebSocket = WrappedWebSocket;
-})();
+}
 

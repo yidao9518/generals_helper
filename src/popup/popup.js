@@ -3,6 +3,8 @@ import { MODE_BATTLE, MODE_RAW } from "../shared/helper-config.js";
 const modeRawBtn = document.getElementById("modeRaw");
 const modeBattleBtn = document.getElementById("modeBattle");
 const toggleVisibleBtn = document.getElementById("toggleVisible");
+const openDisplayBtn = document.getElementById("openDisplay");
+const openSettingsBtn = document.getElementById("openSettings");
 const autoRefreshBtn = document.getElementById("autoRefresh");
 const showTurnBtn = document.getElementById("showTurn");
 const showPlayersBtn = document.getElementById("showPlayers");
@@ -22,8 +24,14 @@ const battleSwitches = [
 ];
 
 async function getActiveTabId() {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  return tabs[0]?.id;
+  const currentWindowTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const currentWindowTab = currentWindowTabs[0];
+  if (currentWindowTab?.url?.includes("generals.io")) {
+    return currentWindowTab.id;
+  }
+
+  const generalsTabs = await chrome.tabs.query({ url: ["*://*.generals.io/*"] });
+  return generalsTabs.find((tab) => tab.active)?.id ?? generalsTabs[0]?.id ?? currentWindowTab?.id;
 }
 
 async function sendToActiveTab(message) {
@@ -32,6 +40,19 @@ async function sendToActiveTab(message) {
     throw new Error("当前页面不可用");
   }
   return chrome.tabs.sendMessage(tabId, message);
+}
+
+async function openSettingsPage() {
+  if (typeof chrome.runtime.openOptionsPage === "function") {
+    await chrome.runtime.openOptionsPage();
+    return;
+  }
+  await chrome.tabs.create({ url: chrome.runtime.getURL("src/options/options.html") });
+}
+
+async function openDisplayPage() {
+  const url = chrome.runtime.getURL("src/display/display.html");
+  await chrome.tabs.create({ url });
 }
 
 function renderState(state) {
@@ -67,32 +88,58 @@ async function refreshState() {
   }
 }
 
-modeRawBtn.addEventListener("click", async () => {
-  try {
-    const state = await sendToActiveTab({ type: "SET_HELPER_MODE", mode: MODE_RAW });
-    renderState(state);
-  } catch {
-    statusEl.textContent = "设置失败";
-  }
-});
+if (modeRawBtn instanceof HTMLButtonElement) {
+  modeRawBtn.addEventListener("click", async () => {
+    try {
+      const state = await sendToActiveTab({ type: "SET_HELPER_MODE", mode: MODE_RAW });
+      renderState(state);
+    } catch {
+      statusEl.textContent = "设置失败";
+    }
+  });
+}
 
-modeBattleBtn.addEventListener("click", async () => {
-  try {
-    const state = await sendToActiveTab({ type: "SET_HELPER_MODE", mode: MODE_BATTLE });
-    renderState(state);
-  } catch {
-    statusEl.textContent = "设置失败";
-  }
-});
+if (modeBattleBtn instanceof HTMLButtonElement) {
+  modeBattleBtn.addEventListener("click", async () => {
+    try {
+      const state = await sendToActiveTab({ type: "SET_HELPER_MODE", mode: MODE_BATTLE });
+      renderState(state);
+    } catch {
+      statusEl.textContent = "设置失败";
+    }
+  });
+}
 
-toggleVisibleBtn.addEventListener("click", async () => {
-  try {
-    await sendToActiveTab({ type: "TOGGLE_HELPER_PANEL" });
-    await refreshState();
-  } catch {
-    statusEl.textContent = "切换失败";
-  }
-});
+if (toggleVisibleBtn instanceof HTMLButtonElement) {
+  toggleVisibleBtn.addEventListener("click", async () => {
+    try {
+      await sendToActiveTab({ type: "TOGGLE_HELPER_PANEL" });
+      await refreshState();
+    } catch {
+      statusEl.textContent = "切换失败";
+    }
+  });
+}
+
+if (openDisplayBtn instanceof HTMLButtonElement) {
+  openDisplayBtn.addEventListener("click", async () => {
+    try {
+      await openDisplayPage();
+    } catch {
+      statusEl.textContent = "无法打开信息显示";
+    }
+  });
+}
+
+if (openSettingsBtn instanceof HTMLButtonElement) {
+  openSettingsBtn.addEventListener("click", async () => {
+    try {
+      await openSettingsPage();
+    } catch {
+      statusEl.textContent = "无法打开设置页面";
+    }
+  });
+}
 
 
 if (autoRefreshBtn instanceof HTMLInputElement) {

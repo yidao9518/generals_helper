@@ -3,6 +3,7 @@ import { summarizeBattleFrames } from "../shared/battle-debug.js";
 import { BATTLE_DISPLAY_CONFIG, decorateBattleFrame, prepareBattleFramesForDisplay, rehydrateBattleFramesFromBuffer } from "./battle-frame-state.js";
 import { getLatestFrames, loadFrameBuffer, saveFrameBuffer, trimFrameBuffer } from "./frame-store.js";
 import { ensureTabState, enrichWithMatchMeta, isAnyTabInMatch, rebuildTabMatchStateFromFrames, restoreTabMatchState, serializeTabMatchState } from "./match-state.js";
+import { createPythonBridgeController } from "./python-bridge-controller.js";
 
 const STORAGE_KEY = "capturedFrames";
 const MATCH_STATE_KEY = "tabMatchState";
@@ -12,11 +13,12 @@ let frameBuffer = [];
 let saveTimer = null;
 const tabMatchState = new Map();
 let bootstrapPromise = null;
+const pythonBridgeController = createPythonBridgeController(() => frameBuffer);
 
 async function bootstrap() {
   frameBuffer = await loadFrameBuffer(STORAGE_KEY, MAX_FRAMES);
   const { [MATCH_STATE_KEY]: savedMatchState } = await chrome.storage.local.get([MATCH_STATE_KEY]);
-  restoreTabMatchState(savedMatchState);
+  restoreTabMatchState(tabMatchState, savedMatchState);
   if (tabMatchState.size === 0 && frameBuffer.length > 0) {
     rebuildTabMatchStateFromFrames(tabMatchState, frameBuffer);
   }
@@ -25,6 +27,7 @@ async function bootstrap() {
     await saveFrameBuffer(STORAGE_KEY, frameBuffer);
     await chrome.storage.local.set({ [MATCH_STATE_KEY]: serializeTabMatchState(tabMatchState) });
   }
+  await pythonBridgeController.bootstrap().catch(() => null);
 }
 
 function ensureBootstrap() {
@@ -60,6 +63,9 @@ function appendFrame(rawFrame, sender) {
   frameBuffer.push(annotatedFrame);
   frameBuffer = trimFrameBuffer(frameBuffer, MAX_FRAMES);
   scheduleSave();
+  void pythonBridgeController.onAnnotatedFrame(annotatedFrame).catch((error) => {
+    pythonBridgeController.reportError(String(error?.message || error));
+  });
 }
 
 function sanitizeBattleFramesForClient(frames) {
@@ -101,6 +107,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       await saveFrameBuffer(STORAGE_KEY, frameBuffer);
       await chrome.storage.local.set({ [MATCH_STATE_KEY]: serializeTabMatchState(tabMatchState) });
       sendResponse({ ok: true });
+      return;
+    }
+
+    const pythonBridgeResponse = await pythonBridgeController.handleMessage(message);
+    if (pythonBridgeResponse) {
+      sendResponse(pythonBridgeResponse);
       return;
     }
 

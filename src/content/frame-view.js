@@ -1,4 +1,5 @@
 import { formatBattleDebugSummary } from "../shared/battle-debug.js";
+import { MODE_BATTLE } from "../shared/helper-config.js";
 import { sendRuntimeMessage } from "../shared/runtime-message.js";
 
 // noinspection JSUnusedGlobalSymbols
@@ -36,7 +37,7 @@ export function createFrameView(getDisplayMode, getBattleDisplayConfig) {
   async function loadFramesInto(container) {
     const requestId = ++latestRequestId;
     const displayMode = getDisplayMode();
-    const onlyInMatch = displayMode === "battle";
+    const onlyInMatch = displayMode === MODE_BATTLE;
     const response = await sendRuntimeMessage({
       type: "GET_LATEST_FRAMES",
       limit: DISPLAY_FRAME_LIMIT,
@@ -53,22 +54,22 @@ export function createFrameView(getDisplayMode, getBattleDisplayConfig) {
     }
 
     let frames = Array.isArray(response.frames) ? response.frames : [];
-    if (displayMode === "battle") {
+    if (displayMode === MODE_BATTLE) {
       frames = frames.filter((frame) => frame?.category === "event");
     }
 
     if (!frames.length) {
-      if (displayMode === "battle" && response.inGame) {
+      if (displayMode === MODE_BATTLE && response.inGame) {
         container.textContent = "游戏中，暂无可分析的战场事件...";
         return;
       }
-      container.textContent = displayMode === "battle"
+      container.textContent = displayMode === MODE_BATTLE
         ? "未在游戏中"
         : "暂无原始消息";
       return;
     }
 
-    if (displayMode === "battle") {
+    if (displayMode === MODE_BATTLE) {
       const battleConfig = typeof getBattleDisplayConfig === "function" ? getBattleDisplayConfig() : {};
       const battleDebugText = battleConfig?.showDebug ? formatBattleDebugSummary(response.battleDebug) : "";
       const battleText = frames.map(formatBattleFrame).join("\n\n");

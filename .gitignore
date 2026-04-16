@@ -20,3 +20,7 @@ coverage/
 *.swp
 .DS_Store
 
+# Certificates
+/certs
+/certs/localhost.crt
+/certs/localhost.key

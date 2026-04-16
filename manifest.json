@@ -3,8 +3,8 @@
   "name": "Generals Helper",
   "description": "Capture generals.io websocket frames for local analysis.",
   "version": "0.1.0",
-  "permissions": ["storage"],
-  "host_permissions": ["*://*.generals.io/*"],
+  "permissions": ["storage", "tabs", "windows"],
+  "host_permissions": ["*://*.generals.io/*", "http://127.0.0.1/*", "http://localhost/*", "https://127.0.0.1/*", "https://localhost/*"],
   "background": {
     "service_worker": "src/background/service-worker.js",
     "type": "module"
@@ -20,9 +20,10 @@
     "default_title": "Generals Helper",
     "default_popup": "src/popup/popup.html"
   },
+  "options_page": "src/options/options.html",
   "web_accessible_resources": [
     {
-      "resources": ["src/injected/ws-hook.js", "src/shared/battle-analyzer.js", "src/shared/battle-debug.js", "src/shared/runtime-message.js", "src/content/frame-view.js", "src/content/panel.html"],
+      "resources": ["src/injected/ws-hook.js", "src/shared/battle-analyzer.js", "src/shared/battle-debug.js", "src/shared/runtime-message.js", "src/shared/helper-config.js", "src/content/frame-view.js", "src/content/panel.html"],
       "matches": ["*://*.generals.io/*"]
     }
   ]

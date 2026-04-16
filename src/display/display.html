@@ -1,0 +1,362 @@
+<!doctype html>
+<!--suppress CssUnusedSymbol -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>信息显示</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        min-height: 100vh;
+        padding: 12px;
+        box-sizing: border-box;
+        background: #0f172a;
+        color: #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 20px;
+      }
+      .description {
+        margin: 0 0 12px;
+        color: #94a3b8;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      button {
+        border: 1px solid #334155;
+        background: #1e293b;
+        color: #e2e8f0;
+        padding: 6px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #334155;
+      }
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .card {
+        background: #111827;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 10px;
+      }
+      .card .label {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-bottom: 4px;
+      }
+      .card .value {
+        font-size: 14px;
+        color: #f8fafc;
+        word-break: break-word;
+      }
+      .board-panel {
+        background: #111827;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        flex: 1;
+      }
+      .board-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-bottom: 1px solid #334155;
+        background: #0b1220;
+        flex-wrap: wrap;
+      }
+      .board-toolbar label {
+        font-size: 11px;
+        color: #94a3b8;
+        white-space: nowrap;
+      }
+      .board-toolbar input[type="range"] {
+        flex: 1 1 180px;
+        min-width: 160px;
+      }
+      .battle-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.9fr);
+        gap: 8px;
+        min-height: 0;
+        flex: 1;
+      }
+      .board-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 12px;
+        border-bottom: 1px solid #334155;
+        background: #0b1220;
+      }
+      .board-header h2 {
+        margin: 0;
+        font-size: 14px;
+      }
+      .board-header .meta {
+        color: #94a3b8;
+        font-size: 11px;
+      }
+      .board-shell {
+        min-height: 0;
+        flex: 1;
+        overflow: auto;
+        padding: 10px;
+        touch-action: pan-x pan-y;
+      }
+      .board-grid {
+        display: grid;
+        gap: 0;
+        width: max-content;
+      }
+      .board-cell {
+        position: relative;
+        box-sizing: border-box;
+        border: 0 solid rgba(15, 23, 42, 0.28);
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #0f172a;
+        user-select: none;
+      }
+      .cell-state-0 {
+        background: #101828;
+      }
+      .cell-state--1 {
+        background: rgb(220, 220, 220);
+      }
+      .cell-state--2 {
+        background: rgb(220, 220, 220) url("assets/patterns/mountain.svg") center / cover no-repeat;
+        color: #1f2937;
+      }
+      .cell-state--3,
+      .cell-state--4 {
+        background: rgb(57, 57, 57);
+        color: #f8fafc;
+      }
+      .cell-state--4::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: rgb(57, 57, 57) url("assets/patterns/obstacle.svg") center / cover no-repeat;
+        opacity: 0.95;
+      }
+      .cell-content {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        font-weight: 700;
+        font-size: 12px;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+      }
+      .cell-state--1 .cell-content,
+      .cell-state--2 .cell-content {
+        color: #1f2937;
+      }
+      .cell-state--3 .cell-content,
+      .cell-state--4 .cell-content {
+        color: #f8fafc;
+      }
+      .cell-empty-text {
+        opacity: 0;
+      }
+      .muted {
+        color: #94a3b8;
+      }
+      .status {
+        font-size: 12px;
+        color: #94a3b8;
+        white-space: pre-wrap;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #94a3b8;
+        font-size: 11px;
+      }
+      .legend-swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        flex: 0 0 auto;
+      }
+      .swatch-neutral {
+        background: rgb(220, 220, 220);
+      }
+      .swatch-dark {
+        background: rgb(57, 57, 57);
+      }
+      .swatch-pattern-2 {
+        background: rgb(220, 220, 220) url("assets/patterns/mountain.svg") center / cover no-repeat;
+      }
+      .swatch-pattern-4 {
+        background: rgb(57, 57, 57) url("assets/patterns/obstacle.svg") center / cover no-repeat;
+      }
+      .empty-board {
+        padding: 24px 12px;
+        color: #94a3b8;
+        text-align: center;
+      }
+      .player-panel {
+        background: #111827;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .player-shell {
+        min-height: 0;
+        flex: 1;
+        overflow: auto;
+        padding: 10px;
+      }
+      .player-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .player-card {
+        background: #0b1220;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 10px;
+      }
+      .player-card-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .player-name {
+        font-weight: 700;
+        font-size: 13px;
+        color: #f8fafc;
+      }
+      .player-status {
+        font-size: 11px;
+        color: #94a3b8;
+      }
+      .player-meta {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px 10px;
+        font-size: 11px;
+        color: #cbd5e1;
+      }
+      .player-meta span {
+        word-break: break-word;
+      }
+      .player-raw {
+        margin-top: 8px;
+        font-size: 11px;
+        color: #94a3b8;
+        word-break: break-word;
+        white-space: pre-wrap;
+      }
+      .player-empty {
+        color: #94a3b8;
+        text-align: center;
+        padding: 20px 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>信息显示</h1>
+    <p class="description">这里显示最新战斗快照的合并战场：颜色表示状态，数字表示兵力（0 隐藏）。页面会自动刷新，适合实时观察当前对局。</p>
+    <div class="toolbar">
+      <button id="refreshBtn">刷新</button>
+      <button id="openSettingsBtn">打开设置页</button>
+    </div>
+
+    <div class="summary">
+      <div class="card">
+        <div class="label">回合</div>
+        <div id="turnValue" class="value muted">暂无</div>
+      </div>
+      <div class="card">
+        <div class="label">对局</div>
+        <div id="matchValue" class="value muted">暂无</div>
+      </div>
+      <div class="card">
+        <div class="label">玩家 / 存活</div>
+        <div id="playersValue" class="value muted">暂无</div>
+      </div>
+      <div class="card">
+        <div class="label">最新摘要</div>
+        <div id="summaryValue" class="value muted">暂无</div>
+      </div>
+    </div>
+
+    <section class="battle-row">
+      <div class="board-panel">
+        <div class="board-header">
+          <h2>合并战场</h2>
+          <div class="legend" aria-label="状态图例">
+            <span class="legend-item"><span class="legend-swatch swatch-neutral"></span>-1</span>
+            <span class="legend-item"><span class="legend-swatch swatch-dark"></span>-2 / -3 / -4</span>
+            <span class="legend-item"><span class="legend-swatch swatch-pattern-2"></span>-2 图案</span>
+            <span class="legend-item"><span class="legend-swatch swatch-pattern-4"></span>-4 图案</span>
+            <span id="boardMeta" class="meta">未加载</span>
+          </div>
+        </div>
+        <div class="board-toolbar">
+          <label for="boardSizeRange">地图大小</label>
+          <input id="boardSizeRange" type="range" min="50" max="150" value="100" step="any" />
+          <span id="boardSizeValue" class="meta">100%</span>
+        </div>
+        <div id="boardShell" class="board-shell">
+          <div id="boardGrid" class="empty-board">暂无数据</div>
+        </div>
+      </div>
+
+      <div class="player-panel">
+        <div class="board-header">
+          <h2>详细玩家信息</h2>
+          <div id="playerMeta" class="meta">未加载</div>
+        </div>
+        <div class="player-shell">
+          <div id="playerList" class="player-list">
+            <div class="player-empty">暂无玩家信息</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="status" class="status">正在加载最新快照...</div>
+    <script type="module" src="display.js"></script>
+  </body>
+</html>
+

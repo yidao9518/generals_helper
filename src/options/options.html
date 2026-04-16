@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Generals Helper 设置</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        width: 420px;
+        padding: 12px;
+        box-sizing: border-box;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+      .description {
+        margin: 0 0 12px;
+        color: #666;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .section {
+        margin-top: 12px;
+        font-size: 12px;
+      }
+      .section-title {
+        margin: 0 0 6px;
+        font-weight: 700;
+      }
+      .actions,
+      .checks {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .checks label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .panel {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 10px;
+        background: #fafafa;
+      }
+      button {
+        border: 1px solid #bbb;
+        background: #f5f5f5;
+        padding: 5px 8px;
+        cursor: pointer;
+        text-align: left;
+      }
+      button[data-active="true"] {
+        border-color: #3b82f6;
+        background: #eaf2ff;
+      }
+      #status {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #666;
+      }
+      .future-note {
+        color: #666;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .bridge-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .bridge-row span {
+        min-width: 72px;
+      }
+      .bridge-row input[type="url"] {
+        flex: 1;
+        box-sizing: border-box;
+        padding: 5px 8px;
+        border: 1px solid #bbb;
+      }
+      .bridge-status {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #666;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .bridge-grid {
+        display: grid;
+        grid-template-columns: 132px 1fr;
+        gap: 6px 10px;
+        margin-top: 8px;
+        font-size: 12px;
+      }
+      .bridge-grid .label {
+        color: #666;
+      }
+      .bridge-grid .value {
+        color: #111;
+        word-break: break-word;
+        white-space: pre-wrap;
+      }
+      .bridge-muted {
+        color: #888;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Generals Helper 设置</h1>
+    <p class="description">这里会逐步放入更完整的设置与信息显示内容。当前先保留与弹窗一致的操作，方便你在更大的页面里调整。</p>
+
+    <div class="section">
+      <div class="section-title">快捷操作</div>
+      <div class="actions">
+        <button id="modeRaw">模式：原始消息</button>
+        <button id="modeBattle">模式：战场信息分析</button>
+        <button id="toggleVisible">关闭面板</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">面板行为</div>
+      <div class="checks">
+        <label><input id="autoRefresh" type="checkbox" checked /> 是否自动更新</label>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">战场信息显示</div>
+      <div class="checks">
+        <label><input id="showTurn" type="checkbox" checked /> 回合</label>
+        <label><input id="showPlayers" type="checkbox" /> 存活人数</label>
+        <label><input id="showMapDiff" type="checkbox" /> 地图变化</label>
+        <label><input id="showCitiesDiff" type="checkbox" /> 城市变化</label>
+        <label><input id="showDesertsDiff" type="checkbox" /> 沙漠变化</label>
+        <label><input id="showDebug" type="checkbox" /> 调试信息</label>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">未来信息显示区</div>
+      <div class="panel future-note">这里后续可以放统计概览、对局摘要、抓包结果可视化等内容。</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">本地 Python 实时分析桥</div>
+      <div class="checks">
+        <label><input id="pythonBridgeEnabled" type="checkbox" checked /> 实时分析推送</label>
+      </div>
+      <label class="bridge-row">
+        <span>服务地址</span>
+        <input id="pythonBridgeUrl" type="url" value="https://127.0.0.1:8765" />
+      </label>
+      <div class="actions" style="margin-top: 8px;">
+        <button id="testPythonBridge">测试实时分析连接</button>
+        <button id="pushLatestSnapshot">立即推送最新分析</button>
+        <button id="openDisplayPage">打开信息显示</button>
+      </div>
+      <div class="bridge-status">说明：浏览器页面不能直接启动本地 Python 进程；这里可以保存服务地址并连接已运行的服务。若要“点页面启动程序”，需要 Native Messaging 或独立启动器。</div>
+      <div class="bridge-grid" aria-label="Python bridge status">
+        <div class="label">服务状态</div>
+        <div id="bridgeServiceStatus" class="value bridge-muted">尚未连接本地 Python 服务。</div>
+
+        <div class="label">最近推送</div>
+        <div id="bridgeLastPushAt" class="value bridge-muted">未记录</div>
+
+        <div class="label">最近检查</div>
+        <div id="bridgeLastHealthCheckAt" class="value bridge-muted">未记录</div>
+
+        <div class="label">最近错误</div>
+        <div id="bridgeLastError" class="value bridge-muted">暂无</div>
+
+        <div class="label">最新摘要</div>
+        <div id="bridgeLastAnalysis" class="value bridge-muted">暂无</div>
+      </div>
+      <div id="bridgeStatus" class="bridge-status">尚未连接本地 Python 服务。</div>
+    </div>
+
+    <div id="status">正在连接页面...</div>
+    <script type="module" src="../popup/popup.js"></script>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
+
+

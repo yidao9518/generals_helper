@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node ./tests/frame-tools.test.js"
+    "test": "node ./tests/frame-tools.test.js && node ./tests/python-bridge.test.js && node ./tests/python-bridge-controller.test.js"
   }
 }
 

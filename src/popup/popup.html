@@ -19,23 +19,10 @@
         flex-direction: column;
         gap: 6px;
       }
-      .section {
+      .hint {
         margin-top: 10px;
         font-size: 12px;
-      }
-      .section-title {
-        margin: 0 0 6px;
-        font-weight: 700;
-      }
-      .checks {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-      .checks label {
-        display: flex;
-        align-items: center;
-        gap: 6px;
+        color: #666;
       }
       button {
         border: 1px solid #bbb;
@@ -43,6 +30,9 @@
         padding: 5px 8px;
         cursor: pointer;
         text-align: left;
+      }
+      button.secondary {
+        background: #fff;
       }
       button[data-active="true"] {
         border-color: #3b82f6;
@@ -61,24 +51,10 @@
       <button id="modeRaw">模式：原始消息</button>
       <button id="modeBattle">模式：战场信息分析</button>
       <button id="toggleVisible">关闭面板</button>
+      <button id="openDisplay" class="secondary">打开信息显示</button>
+      <button id="openSettings" class="secondary">打开设置页面</button>
     </div>
-    <div class="section">
-      <div class="section-title">面板行为</div>
-      <div class="checks">
-        <label><input id="autoRefresh" type="checkbox" checked /> 是否自动更新</label>
-      </div>
-    </div>
-    <div class="section">
-      <div class="section-title">战场信息显示</div>
-      <div class="checks">
-        <label><input id="showTurn" type="checkbox" checked /> 回合</label>
-        <label><input id="showPlayers" type="checkbox" /> 存活人数</label>
-        <label><input id="showMapDiff" type="checkbox" /> 地图变化</label>
-        <label><input id="showCitiesDiff" type="checkbox" /> 城市变化</label>
-        <label><input id="showDesertsDiff" type="checkbox" /> 沙漠变化</label>
-        <label><input id="showDebug" type="checkbox" /> 调试信息</label>
-      </div>
-    </div>
+    <div class="hint">更详细的设置与未来的信息显示内容，请到独立设置页查看。</div>
     <div id="status">正在连接页面...</div>
     <script type="module" src="popup.js"></script>
   </body>

@@ -9,6 +9,7 @@ export const BATTLE_DISPLAY_CONFIG = {
   showPlayers: false,
   showMapDiff: true,
   showCitiesDiff: false,
-  showDesertsDiff: false
+  showDesertsDiff: false,
+  showDebug: false
 };
 

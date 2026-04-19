@@ -1,14 +1,22 @@
-import {
-  BATTLE_DISPLAY_CONFIG,
-  BRIDGE_SOURCE,
-  INIT_FLAG,
-  MODE_BATTLE,
-  MODE_RAW,
-  PANEL_ID,
-  REFRESH_MS
-} from "../shared/helper-config.js";
-
 const PANEL_TEMPLATE_URL = chrome.runtime.getURL("src/content/panel.html");
+
+const helperConfigPromise = import(chrome.runtime.getURL("src/shared/helper-config.js"));
+
+const BRIDGE_SOURCE = "generals-helper-ws-hook";
+const INIT_FLAG = "__generalsHelperContentInitialized";
+const MODE_BATTLE = "battle";
+const MODE_RAW = "raw";
+const PANEL_ID = "generals-helper-panel-root";
+const REFRESH_MS = 1500;
+
+let BATTLE_DISPLAY_CONFIG = {
+  showTurn: true,
+  showPlayers: false,
+  showMapDiff: true,
+  showCitiesDiff: false,
+  showDesertsDiff: false,
+  showDebug: false
+};
 
 const runtimeMessagePromise = import(chrome.runtime.getURL("src/shared/runtime-message.js"));
 
@@ -25,7 +33,7 @@ let panelRefresh = null;
 let displayMode = MODE_RAW;
 let autoRefreshEnabled = true;
 
-const CONTENT_BATTLE_DISPLAY_CONFIG = { ...BATTLE_DISPLAY_CONFIG };
+let CONTENT_BATTLE_DISPLAY_CONFIG = { ...BATTLE_DISPLAY_CONFIG };
 
 function getFrameViewModule() {
   if (!frameViewPromise) {
@@ -62,13 +70,9 @@ function getPanelTemplate() {
   return panelTemplatePromise;
 }
 
-function getModeLabel(mode) {
-  return mode === MODE_BATTLE ? "战场信息分析" : "原始消息";
-}
-
 function syncPanelTitle() {
   if (titleEl) {
-    titleEl.textContent = getModeLabel(displayMode);
+    titleEl.textContent = displayMode === MODE_BATTLE ? "战场信息分析" : "原始消息";
   }
 }
 
@@ -208,6 +212,74 @@ function getPanelState() {
   };
 }
 
+async function bootstrapContentScript() {
+  const { default: helperConfig } = await helperConfigPromise;
+  BATTLE_DISPLAY_CONFIG = { ...helperConfig.BATTLE_DISPLAY_CONFIG };
+  CONTENT_BATTLE_DISPLAY_CONFIG = { ...BATTLE_DISPLAY_CONFIG };
+  displayMode = MODE_RAW;
+
+  if (window !== window.top || window[INIT_FLAG]) {
+    return;
+  }
+
+  window[INIT_FLAG] = true;
+  window.addEventListener("message", forwardCapturedFrame);
+  injectWsHook();
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type === "GET_HELPER_STATE") {
+      sendResponse({ ok: true, ...getPanelState() });
+      return;
+    }
+    if (message?.type === "SHOW_HELPER_PANEL") {
+      showPanel();
+    }
+    if (message?.type === "TOGGLE_HELPER_PANEL") {
+      togglePanel();
+    }
+    if (message?.type === "SET_HELPER_VISIBLE") {
+      if (message.visible) {
+        showPanel();
+      } else {
+        hidePanel();
+      }
+      sendResponse({ ok: true, ...getPanelState() });
+      return;
+    }
+    if (message?.type === "SET_HELPER_MODE") {
+      setDisplayMode(message.mode);
+      sendResponse({ ok: true, ...getPanelState() });
+      return;
+    }
+    if (message?.type === "SET_HELPER_AUTO_REFRESH") {
+      autoRefreshEnabled = message.enabled !== false;
+      syncAutoRefresh();
+      sendResponse({ ok: true, ...getPanelState() });
+      return;
+    }
+    if (message?.type === "SET_BATTLE_CONFIG") {
+      if (typeof message.config === "object" && message.config !== null) {
+        Object.assign(CONTENT_BATTLE_DISPLAY_CONFIG, message.config);
+        if (typeof panelRefresh === "function") {
+          panelRefresh();
+        }
+      }
+      sendResponse({ ok: true, ...getPanelState() });
+      return;
+    }
+    if (message?.type === "BATTLE_SNAPSHOT_UPDATED") {
+      return;
+    }
+    sendResponse({ ok: true, ...getPanelState() });
+  });
+
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", bootPanel, { once: true });
+  } else {
+    void bootPanel();
+  }
+}
+
 async function bootPanel() {
   await getPanelTemplate();
   const panel = mountPanel();
@@ -235,50 +307,6 @@ async function bootPanel() {
   window.addEventListener("unload", () => stopAutoRefresh());
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === "GET_HELPER_STATE") {
-    sendResponse({ ok: true, ...getPanelState() });
-    return;
-  }
-  if (message?.type === "SHOW_HELPER_PANEL") {
-    showPanel();
-  }
-  if (message?.type === "TOGGLE_HELPER_PANEL") {
-    togglePanel();
-  }
-  if (message?.type === "SET_HELPER_VISIBLE") {
-    if (message.visible) {
-      showPanel();
-    } else {
-      hidePanel();
-    }
-    sendResponse({ ok: true, ...getPanelState() });
-    return;
-  }
-  if (message?.type === "SET_HELPER_MODE") {
-    setDisplayMode(message.mode);
-    sendResponse({ ok: true, ...getPanelState() });
-    return;
-  }
-  if (message?.type === "SET_HELPER_AUTO_REFRESH") {
-    autoRefreshEnabled = message.enabled !== false;
-    syncAutoRefresh();
-    sendResponse({ ok: true, ...getPanelState() });
-    return;
-  }
-  if (message?.type === "SET_BATTLE_CONFIG") {
-    if (typeof message.config === "object" && message.config !== null) {
-      Object.assign(CONTENT_BATTLE_DISPLAY_CONFIG, message.config);
-      if (typeof panelRefresh === "function") {
-        panelRefresh();
-      }
-    }
-    sendResponse({ ok: true, ...getPanelState() });
-    return;
-  }
-  sendResponse({ ok: true, ...getPanelState() });
-});
-
 function forwardCapturedFrame(event) {
   if (event.source !== window) {
     return;
@@ -296,13 +324,4 @@ function forwardCapturedFrame(event) {
   });
 }
 
-if (window === window.top && !window[INIT_FLAG]) {
-  window[INIT_FLAG] = true;
-  window.addEventListener("message", forwardCapturedFrame);
-  injectWsHook();
-  if (document.readyState === "loading") {
-    window.addEventListener("DOMContentLoaded", bootPanel, { once: true });
-  } else {
-    void bootPanel();
-  }
-}
+void bootstrapContentScript();

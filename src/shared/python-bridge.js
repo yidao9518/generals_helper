@@ -4,6 +4,7 @@ export const PYTHON_BRIDGE_STORAGE_KEY = "pythonBridge";
 export const DEFAULT_PYTHON_BRIDGE_CONFIG = {
   enabled: true,
   autoPush: true,
+  simpleMode: false,
   url: "https://127.0.0.1:8765",
   timeoutMs: 2500
 };
@@ -45,15 +46,35 @@ function pickNumericScore(player) {
   return null;
 }
 
-function normalizePlayers(scores) {
+function normalizePlayers(scores, playerMeta = null) {
   if (!Array.isArray(scores)) {
     return [];
   }
 
+  const metaPlayers = Array.isArray(playerMeta?.players) ? playerMeta.players : [];
+  const metaPlayersByIndex = new Map();
+  for (const metaPlayer of metaPlayers) {
+    if (metaPlayer && typeof metaPlayer === "object" && Number.isInteger(metaPlayer.i)) {
+      metaPlayersByIndex.set(metaPlayer.i, metaPlayer);
+    }
+  }
+  const selfIndex = Number.isInteger(playerMeta?.playerIndex) ? playerMeta.playerIndex : null;
+
   return scores.map((player, index) => {
     const rawPlayer = player && typeof player === "object" ? { ...player } : { value: player };
+    const scoreIndex = Number.isInteger(rawPlayer.i) ? rawPlayer.i : index;
+    const metaPlayer = metaPlayersByIndex.get(scoreIndex) || (metaPlayers[index] && typeof metaPlayers[index] === "object" ? metaPlayers[index] : null);
+    const playerIndex = Number.isInteger(metaPlayer?.i) ? metaPlayer.i : (Number.isInteger(rawPlayer.i) ? rawPlayer.i : index);
+    const color = Number.isInteger(metaPlayer?.color) ? metaPlayer.color : (Number.isInteger(rawPlayer.color) ? rawPlayer.color : null);
+    const name = typeof metaPlayer?.name === "string" && metaPlayer.name.trim()
+      ? metaPlayer.name.trim()
+      : (typeof rawPlayer.name === "string" && rawPlayer.name.trim() ? rawPlayer.name.trim() : null);
     return {
       index,
+      i: playerIndex,
+      color,
+      name,
+      isSelf: selfIndex === null ? null : playerIndex === selfIndex,
       alive: rawPlayer.dead !== true && rawPlayer.alive !== false,
       dead: Boolean(rawPlayer.dead),
       score: pickNumericScore(rawPlayer),
@@ -131,7 +152,7 @@ export function buildBattleSnapshot(frame) {
     turn,
     playerCount: parsed.battleUpdate.playerCount,
     aliveCount: parsed.battleUpdate.aliveCount,
-    players: normalizePlayers(parsed.data.scores),
+    players: normalizePlayers(parsed.data.scores, frame?.playerMeta),
     board: normalizeBattleBoard(battleMapState),
     battle: {
       attackIndex: Number.isInteger(parsed.battleUpdate.attackIndex) ? parsed.battleUpdate.attackIndex : null,
@@ -189,6 +210,7 @@ export function normalizePythonBridgeConfig(config) {
   return {
     enabled: source.enabled !== false,
     autoPush: source.autoPush !== false,
+    simpleMode: source.simpleMode === true,
     url: normalizeUrl(source.url),
     timeoutMs: toPositiveInteger(source.timeoutMs, DEFAULT_PYTHON_BRIDGE_CONFIG.timeoutMs)
   };
@@ -229,6 +251,25 @@ export async function pingPythonBridge(configOrUrl) {
   return requestJson(`${config.url}/healthz`, { method: "GET", timeoutMs: config.timeoutMs });
 }
 
+export async function fetchPythonBridgeLatestRecord(configOrUrl) {
+  const config = typeof configOrUrl === "string"
+    ? normalizePythonBridgeConfig({ url: configOrUrl })
+    : normalizePythonBridgeConfig(configOrUrl);
+  return requestJson(`${config.url}/v1/latest`, { method: "GET", timeoutMs: config.timeoutMs });
+}
+
+function buildIngestPayload(snapshot) {
+  if (snapshot && typeof snapshot === "object" && snapshot.type === "battle_snapshot" && snapshot.snapshot && typeof snapshot.snapshot === "object") {
+    return snapshot;
+  }
+
+  return {
+    type: "battle_snapshot",
+    source: typeof snapshot?.source === "string" && snapshot.source.trim() ? snapshot.source.trim() : "extension",
+    snapshot
+  };
+}
+
 export async function postBattleSnapshotToPython(configOrUrl, snapshot) {
   const config = typeof configOrUrl === "string"
     ? normalizePythonBridgeConfig({ url: configOrUrl })
@@ -237,7 +278,7 @@ export async function postBattleSnapshotToPython(configOrUrl, snapshot) {
   return requestJson(`${config.url}/v1/ingest`, {
     method: "POST",
     timeoutMs: config.timeoutMs,
-    body: JSON.stringify(snapshot)
+    body: JSON.stringify(buildIngestPayload(snapshot))
   });
 }
 

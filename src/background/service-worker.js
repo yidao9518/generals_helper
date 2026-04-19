@@ -4,6 +4,7 @@ import { BATTLE_DISPLAY_CONFIG, decorateBattleFrame, prepareBattleFramesForDispl
 import { getLatestFrames, loadFrameBuffer, saveFrameBuffer, trimFrameBuffer } from "./frame-store.js";
 import { ensureTabState, enrichWithMatchMeta, isAnyTabInMatch, rebuildTabMatchStateFromFrames, restoreTabMatchState, serializeTabMatchState } from "./match-state.js";
 import { createPythonBridgeController } from "./python-bridge-controller.js";
+import { buildBattleSnapshot } from "../shared/python-bridge.js";
 
 const STORAGE_KEY = "capturedFrames";
 const MATCH_STATE_KEY = "tabMatchState";
@@ -63,6 +64,18 @@ function appendFrame(rawFrame, sender) {
   frameBuffer.push(annotatedFrame);
   frameBuffer = trimFrameBuffer(frameBuffer, MAX_FRAMES);
   scheduleSave();
+  const latestSnapshot = buildBattleSnapshot(annotatedFrame);
+  if (latestSnapshot) {
+    void chrome.runtime.sendMessage({
+      type: "BATTLE_SNAPSHOT_UPDATED",
+      frame: annotatedFrame,
+      snapshot: latestSnapshot,
+      latest: {
+        frame: annotatedFrame,
+        snapshot: latestSnapshot
+      }
+    }).catch(() => null);
+  }
   void pythonBridgeController.onAnnotatedFrame(annotatedFrame).catch((error) => {
     pythonBridgeController.reportError(String(error?.message || error));
   });
@@ -78,6 +91,21 @@ function sanitizeBattleFramesForClient(frames) {
   });
 }
 
+export function buildLatestFramesResponse(frameBuffer, limit, filters, tabMatchState) {
+  const onlyInMatch = Boolean(filters?.onlyInMatch);
+  const battleConfig = filters?.battleConfig && typeof filters.battleConfig === "object" ? filters.battleConfig : BATTLE_DISPLAY_CONFIG;
+  const candidateFrames = onlyInMatch ? frameBuffer.filter((frame) => frame?.inMatch) : frameBuffer;
+  const latestFrames = getLatestFrames(candidateFrames, limit);
+  const preparedFrames = prepareBattleFramesForDisplay(latestFrames, battleConfig);
+
+  return {
+    ok: true,
+    inGame: isAnyTabInMatch(tabMatchState),
+    frames: onlyInMatch ? sanitizeBattleFramesForClient(preparedFrames) : preparedFrames,
+    battleDebug: summarizeBattleFrames(preparedFrames)
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     await ensureBootstrap();
@@ -88,16 +116,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
 
+    if (message?.type === "BATTLE_SNAPSHOT_UPDATED") {
+      sendResponse({ ok: true });
+      return;
+    }
+
     if (message?.type === "GET_LATEST_FRAMES") {
-      const latestFrames = getLatestFrames(frameBuffer, message.limit, { ...message.filters, onlyInMatch: false });
-      const filteredFrames = message?.filters?.onlyInMatch ? latestFrames.filter((frame) => frame?.inMatch) : latestFrames;
-      const preparedFrames = prepareBattleFramesForDisplay(filteredFrames, BATTLE_DISPLAY_CONFIG);
-      sendResponse({
-        ok: true,
-        inGame: isAnyTabInMatch(tabMatchState),
-        frames: message?.filters?.onlyInMatch ? sanitizeBattleFramesForClient(preparedFrames) : preparedFrames,
-        battleDebug: summarizeBattleFrames(preparedFrames)
-      });
+      sendResponse(buildLatestFramesResponse(frameBuffer, message.limit, message.filters, tabMatchState));
       return;
     }
 

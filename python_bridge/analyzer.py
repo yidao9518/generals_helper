@@ -21,82 +21,52 @@ def _coerce_int(value: Any) -> int | None:
     return None
 
 
-def _is_truthy_score(value: Any) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value > 0
-    if isinstance(value, str):
-        return value.strip().lower() not in {"", "0", "false", "dead", "defeated"}
-    return True
+def _first_numeric_value(source: Any, preferred_keys: tuple[str, ...] = ()) -> float | None:
+    if not isinstance(source, dict):
+        return None
 
-
-def _extract_score_value(player: dict[str, Any]) -> float | None:
-    if not isinstance(player, dict):
-      return None
-
-    preferred_keys = ("score", "total", "tiles", "army", "land", "cells", "value", "count")
     for key in preferred_keys:
-        value = player.get(key)
+        value = source.get(key)
         if isinstance(value, bool):
             continue
         if isinstance(value, (int, float)):
             return float(value)
 
-    raw = player.get("raw")
-    if isinstance(raw, dict):
-        for key in preferred_keys:
-            value = raw.get(key)
-            if isinstance(value, bool):
-                continue
-            if isinstance(value, (int, float)):
-                return float(value)
-
-    for value in player.values():
+    for value in source.values():
         if isinstance(value, bool):
             continue
         if isinstance(value, (int, float)):
             return float(value)
-
-    if isinstance(raw, dict):
-        for value in raw.values():
-            if isinstance(value, bool):
-                continue
-            if isinstance(value, (int, float)):
-                return float(value)
 
     return None
 
 
-def _count_non_empty(value: Any) -> int:
-    if value is None:
-        return 0
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, (int, float)):
-        return int(value != 0)
-    if isinstance(value, str):
-        return int(bool(value.strip()))
-    if isinstance(value, dict):
-        if not value:
-            return 0
-        if any(key in value for key in ("owner", "playerId", "team", "army", "strength", "state", "terrain")):
-            return int(any(_is_truthy_score(item) for item in value.values()))
-        return sum(_count_non_empty(item) for item in value.values())
-    if isinstance(value, (list, tuple)):
-        return sum(_count_non_empty(item) for item in value)
-    return int(bool(value))
+def _matrix_shape(matrix: Any) -> tuple[int | None, int | None]:
+    if not isinstance(matrix, (list, tuple)):
+        return None, None
+    rows = len(matrix)
+    columns = len(matrix[0]) if matrix and isinstance(matrix[0], (list, tuple)) else None
+    return rows, columns
+
+
+def _normalize_snapshot(snapshot: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any], Any, int | None]:
+    normalized_snapshot = snapshot if isinstance(snapshot, dict) else {}
+    players = normalized_snapshot.get("players") if isinstance(normalized_snapshot.get("players"), list) else []
+    board = normalized_snapshot.get("board") if isinstance(normalized_snapshot.get("board"), dict) else {}
+    game_id = normalized_snapshot.get("gameId")
+    turn = _coerce_int(normalized_snapshot.get("turn"))
+    return normalized_snapshot, players, board, game_id, turn
 
 
 def _summarize_players(players: list[dict[str, Any]]) -> dict[str, Any]:
     scores: list[float] = []
     alive_count = 0
+    preferred_keys = ("score",)
+
     for player in players:
         if not isinstance(player, dict):
             continue
-        score = _extract_score_value(player)
+        score = _first_numeric_value(player, preferred_keys)
         if score is not None:
             scores.append(score)
         dead = player.get("dead")
@@ -125,22 +95,25 @@ def _summarize_players(players: list[dict[str, Any]]) -> dict[str, Any]:
 def _summarize_board(board: dict[str, Any]) -> dict[str, Any]:
     width = _coerce_int(board.get("width"))
     height = _coerce_int(board.get("height"))
-    cells = board.get("cells")
-    army_table = board.get("armyTable")
     state_table = board.get("stateTable")
-    rows = len(cells) if isinstance(cells, list) else None
-    columns = len(cells[0]) if isinstance(cells, list) and cells and isinstance(cells[0], (list, tuple)) else None
+    army_table = board.get("armyTable")
+    rows, columns = _matrix_shape(state_table)
 
-    summary: dict[str, Any] = {
-        "width": width,
-        "height": height,
-        "cellRows": rows,
-        "cellColumns": columns,
-        "hasCells": bool(cells)
-    }
+    def count_occupied(matrix: Any) -> int | None:
+        rows_local, _ = _matrix_shape(matrix)
+        if rows_local is None:
+            return None
+        total = 0
+        for row in matrix:
+            if not isinstance(row, (list, tuple)):
+                continue
+            for value in row:
+                if isinstance(value, (int, float)) and not isinstance(value, bool) and value != 0:
+                    total += 1
+        return total
 
-    occupied_source = cells if isinstance(cells, (list, tuple)) else army_table if isinstance(army_table, (list, tuple)) else state_table if isinstance(state_table, (list, tuple)) else None
-    summary["occupiedCells"] = _count_non_empty(occupied_source) if occupied_source is not None else None
+    summary: dict[str, Any] = {"width": width, "height": height, "cellRows": rows, "cellColumns": columns,
+                               "hasCells": bool(state_table), "occupiedCells": count_occupied(state_table)}
 
     if isinstance(army_table, (list, tuple)):
         summary["armyRows"] = len(army_table)
@@ -160,11 +133,7 @@ def _summarize_board(board: dict[str, Any]) -> dict[str, Any]:
 def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Create a compact analysis payload for one structured battle snapshot."""
 
-    snapshot = snapshot if isinstance(snapshot, dict) else {}
-    players = snapshot.get("players") if isinstance(snapshot.get("players"), list) else []
-    board = snapshot.get("board") if isinstance(snapshot.get("board"), dict) else {}
-    game_id = snapshot.get("gameId") or snapshot.get("game_id")
-    turn = _coerce_int(snapshot.get("turn"))
+    snapshot, players, board, game_id, turn = _normalize_snapshot(snapshot)
 
     player_summary = _summarize_players(players)
     board_summary = _summarize_board(board)
@@ -180,14 +149,16 @@ def analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
         notes.append("players missing")
 
     summary_text_parts = []
-    if game_id is not None:
-        summary_text_parts.append(f"game={game_id}")
-    if turn is not None:
-        summary_text_parts.append(f"turn={turn}")
-    if board_summary["width"] is not None and board_summary["height"] is not None:
-        summary_text_parts.append(f"board={board_summary['width']}x{board_summary['height']}")
-    summary_text_parts.append(f"players={player_summary['playerCount']}")
-    summary_text_parts.append(f"alive={player_summary['aliveCount']}")
+    for label, value in (
+        ("game", game_id),
+        ("turn", turn),
+        ("board", f"{board_summary['width']}x{board_summary['height']}" if board_summary["width"] is not None and board_summary["height"] is not None else None),
+        ("players", player_summary["playerCount"]),
+        ("alive", player_summary["aliveCount"])
+    ):
+        if value is None:
+            continue
+        summary_text_parts.append(f"{label}={value}")
 
     return {
         "gameId": game_id,

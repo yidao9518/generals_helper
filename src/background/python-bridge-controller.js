@@ -1,6 +1,6 @@
 import { DEFAULT_PYTHON_BRIDGE_CONFIG, buildBattleSnapshot, findLatestBattleSnapshotFrame, loadPythonBridgeConfig, pingPythonBridge, postBattleSnapshotToPython, savePythonBridgeConfig } from "../shared/python-bridge.js";
 
-export function createPythonBridgeController(getFrameBuffer, _options = {}) {
+export function createPythonBridgeController(getFrameBuffer) {
   const pythonBridgeState = {
     enabled: DEFAULT_PYTHON_BRIDGE_CONFIG.enabled,
     autoPush: DEFAULT_PYTHON_BRIDGE_CONFIG.autoPush,
@@ -82,6 +82,12 @@ export function createPythonBridgeController(getFrameBuffer, _options = {}) {
     if (!result.ok) {
       throw new Error(result.body?.error || `HTTP ${result.status}`);
     }
+
+    void chrome.runtime.sendMessage({
+      type: "PYTHON_BRIDGE_PUSH_SUCCEEDED",
+      reason,
+      status: getState()
+    }).catch(() => null);
 
     return { ok: true, reason, response: result.body };
   }

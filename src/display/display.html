@@ -5,6 +5,10 @@
     <meta charset="UTF-8" />
     <title>信息显示</title>
     <style>
+      :root {
+        --player-accent: #334155;
+      }
+
       body {
         margin: 0;
         font-family: Arial, sans-serif;
@@ -31,6 +35,18 @@
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
+        align-items: center;
+      }
+      .toolbar-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #cbd5e1;
+        padding: 0 4px;
+      }
+      .toolbar-toggle input {
+        margin: 0;
       }
       button {
         border: 1px solid #334155;
@@ -106,6 +122,13 @@
         border-bottom: 1px solid #334155;
         background: #0b1220;
       }
+      .board-header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        flex-wrap: wrap;
+      }
       .board-header h2 {
         margin: 0;
         font-size: 14px;
@@ -144,7 +167,7 @@
         background: rgb(220, 220, 220);
       }
       .cell-state--2 {
-        background: rgb(220, 220, 220) url("assets/patterns/mountain.svg") center / cover no-repeat;
+        background: rgb(172, 172, 172) url("assets/patterns/mountain.svg") center / cover no-repeat;
         color: #1f2937;
       }
       .cell-state--3,
@@ -218,7 +241,7 @@
         background: rgb(57, 57, 57);
       }
       .swatch-pattern-2 {
-        background: rgb(220, 220, 220) url("assets/patterns/mountain.svg") center / cover no-repeat;
+        background: rgb(172, 172, 172) url("assets/patterns/mountain.svg") center / cover no-repeat;
       }
       .swatch-pattern-4 {
         background: rgb(57, 57, 57) url("assets/patterns/obstacle.svg") center / cover no-repeat;
@@ -248,10 +271,25 @@
         gap: 8px;
       }
       .player-card {
+        position: relative;
+        overflow: hidden;
         background: #0b1220;
         border: 1px solid #334155;
+        border-left: 4px solid var(--player-accent, #334155);
         border-radius: 8px;
         padding: 10px;
+      }
+      .player-card--dead::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: repeating-linear-gradient(135deg, rgba(148, 163, 184, 0.55) 0 10px, rgba(148, 163, 184, 0.18) 10px 20px);
+        opacity: 0.95;
+      }
+      .player-card--simple {
+        padding-top: 8px;
+        padding-bottom: 8px;
       }
       .player-card-header {
         display: flex;
@@ -260,10 +298,28 @@
         align-items: center;
         margin-bottom: 8px;
       }
+      .player-card--simple .player-card-header {
+        justify-content: flex-start;
+        margin-bottom: 0;
+      }
+      .player-title-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .player-color-badge {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        flex: 0 0 auto;
+        box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.45);
+      }
       .player-name {
         font-weight: 700;
         font-size: 13px;
         color: #f8fafc;
+        min-width: 0;
       }
       .player-status {
         font-size: 11px;
@@ -295,7 +351,7 @@
   </head>
   <body>
     <h1>信息显示</h1>
-    <p class="description">这里显示最新战斗快照的合并战场：颜色表示状态，数字表示兵力（0 隐藏）。页面会自动刷新，适合实时观察当前对局。</p>
+    <p class="description">这里直接读取本地 Python 服务里的最新战斗快照与分析结果：颜色表示状态，数字表示兵力（0 隐藏）。页面会自动刷新，适合实时观察当前对局。</p>
     <div class="toolbar">
       <button id="refreshBtn">刷新</button>
       <button id="openSettingsBtn">打开设置页</button>
@@ -326,9 +382,9 @@
           <h2>合并战场</h2>
           <div class="legend" aria-label="状态图例">
             <span class="legend-item"><span class="legend-swatch swatch-neutral"></span>-1</span>
-            <span class="legend-item"><span class="legend-swatch swatch-dark"></span>-2 / -3 / -4</span>
-            <span class="legend-item"><span class="legend-swatch swatch-pattern-2"></span>-2 图案</span>
-            <span class="legend-item"><span class="legend-swatch swatch-pattern-4"></span>-4 图案</span>
+            <span class="legend-item"><span class="legend-swatch swatch-pattern-2"></span>-2</span>
+            <span class="legend-item"><span class="legend-swatch swatch-dark"></span>-3</span>
+            <span class="legend-item"><span class="legend-swatch swatch-pattern-4"></span>-4</span>
             <span id="boardMeta" class="meta">未加载</span>
           </div>
         </div>
@@ -344,7 +400,10 @@
 
       <div class="player-panel">
         <div class="board-header">
-          <h2>详细玩家信息</h2>
+          <div class="board-header-left">
+            <h2>玩家信息</h2>
+            <label class="toolbar-toggle"><input id="simpleMode" type="checkbox" /> 简约模式</label>
+          </div>
           <div id="playerMeta" class="meta">未加载</div>
         </div>
         <div class="player-shell">
@@ -356,7 +415,7 @@
     </section>
 
     <div id="status" class="status">正在加载最新快照...</div>
-    <script type="module" src="display.js"></script>
+    <script type="module" src="display-main.js"></script>
   </body>
 </html>
 

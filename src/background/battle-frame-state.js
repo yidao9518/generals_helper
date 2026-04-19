@@ -1,9 +1,9 @@
 // noinspection JSUnusedGlobalSymbols
 import { applyBattleUpdateToBattleMapState, formatBattleUpdate, parseBattleUpdate } from "../shared/battle-analyzer.js";
-import { BATTLE_DISPLAY_CONFIG } from "../shared/helper-config.js";
+import helperConfig from "../shared/helper-config.js";
 import { ensureTabState } from "./match-state.js";
 
-export { BATTLE_DISPLAY_CONFIG };
+export const BATTLE_DISPLAY_CONFIG = helperConfig.BATTLE_DISPLAY_CONFIG;
 
 function parseBattleUpdateFromFrame(frame) {
   if (frame?.eventName !== "game_update" || typeof frame.preview !== "string" || !frame.preview.startsWith("42")) {
@@ -21,6 +21,7 @@ function parseBattleUpdateFromFrame(frame) {
 function buildBattleFrameFields(frame, battleUpdate, battleMapStateBefore, battleMapStateAfter, displayConfig) {
   return {
     ...frame,
+    playerMeta: frame.playerMeta || null,
     battleMapStateBefore,
     battleMapStateAfter,
     battleSummary: formatBattleUpdate(battleUpdate, displayConfig, battleMapStateBefore || battleMapStateAfter || null),
@@ -40,6 +41,7 @@ function applyBattleFrame(frame, state, displayConfig, { mutateFrame = false } =
     targetFrame.battleMapStateBefore = null;
     targetFrame.battleMapStateAfter = null;
     targetFrame.battleSummary = "";
+    targetFrame.playerMeta = state.playerMeta || targetFrame.playerMeta || null;
     return { frame: targetFrame, battleUpdate: null, changed: true };
   }
 
@@ -57,6 +59,10 @@ function applyBattleFrame(frame, state, displayConfig, { mutateFrame = false } =
 
   if (targetFrame?.battleMapStateAfter && typeof targetFrame.battleMapStateAfter === "object") {
     state.battleMapState = targetFrame.battleMapStateAfter;
+  }
+
+  if (state.playerMeta && !targetFrame.playerMeta) {
+    targetFrame.playerMeta = state.playerMeta;
   }
 
   return { frame: targetFrame, battleUpdate: null, changed: false };

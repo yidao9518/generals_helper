@@ -12,62 +12,93 @@ from typing import Any
 from .protocol import DEFAULT_MAX_RECORDS
 
 
-def _coerce_sticky_state(value: Any) -> int | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    return None
-
-
-def _extract_cell_state(cell: Any) -> int | None:
-    if isinstance(cell, dict):
-        return _coerce_sticky_state(cell.get("state"))
-    return _coerce_sticky_state(cell)
-
-
-def _force_cell_state(cell: Any, state: int) -> Any:
-    if isinstance(cell, dict):
-        next_cell = deepcopy(cell)
-        next_cell["state"] = state
-        return next_cell
-    return state
-
-
-def _merge_sticky_matrix(current_matrix: Any, previous_matrix: Any) -> Any:
+def _merge_sticky_state_matrix(current_matrix: Any, previous_matrix: Any) -> Any:
     if not isinstance(current_matrix, (list, tuple)):
-        return deepcopy(current_matrix)
+        return deepcopy(previous_matrix) if isinstance(previous_matrix, (list, tuple)) else deepcopy(current_matrix)
 
     previous_rows = previous_matrix if isinstance(previous_matrix, (list, tuple)) else []
     merged_rows: list[Any] = []
-    for row_index, current_row in enumerate(current_matrix):
+    row_count = max(len(current_matrix), len(previous_rows))
+    for row_index in range(row_count):
+        current_row = current_matrix[row_index] if row_index < len(current_matrix) else None
         previous_row = previous_rows[row_index] if row_index < len(previous_rows) and isinstance(previous_rows[row_index], (list, tuple)) else []
+
         if not isinstance(current_row, (list, tuple)):
-            merged_rows.append(deepcopy(current_row))
+            merged_rows.append(deepcopy(previous_row) if previous_row else deepcopy(current_row))
             continue
 
         merged_row: list[Any] = []
-        for column_index, current_cell in enumerate(current_row):
+        column_count = max(len(current_row), len(previous_row))
+        for column_index in range(column_count):
+            current_cell = current_row[column_index] if column_index < len(current_row) else None
             previous_cell = previous_row[column_index] if column_index < len(previous_row) else None
-            current_state = _extract_cell_state(current_cell)
-            previous_state = _extract_cell_state(previous_cell)
-            if current_state == -2 or previous_state == -2:
-                merged_row.append(_force_cell_state(current_cell, -2))
-            else:
+            if current_cell == -2 or previous_cell == -2:
+                merged_row.append(-2)
+            elif current_cell is not None:
                 merged_row.append(deepcopy(current_cell))
+            else:
+                merged_row.append(deepcopy(previous_cell))
         merged_rows.append(merged_row)
 
     return merged_rows
+
+
+def _extract_state_table(board: dict[str, Any]) -> Any:
+    if not isinstance(board, dict):
+        return None
+
+    state_table = board.get("stateTable")
+    if isinstance(state_table, (list, tuple)):
+        return state_table
+    return None
+
+
+def _build_cells_from_tables(army_table: Any, state_table: Any) -> Any:
+    if not isinstance(state_table, (list, tuple)):
+        return None
+
+    army_rows = army_table if isinstance(army_table, (list, tuple)) else []
+    merged_rows: list[Any] = []
+    row_count = max(len(army_rows), len(state_table))
+
+    for row_index in range(row_count):
+        army_row = army_rows[row_index] if row_index < len(army_rows) and isinstance(army_rows[row_index], (list, tuple)) else []
+        state_row = state_table[row_index] if row_index < len(state_table) and isinstance(state_table[row_index], (list, tuple)) else []
+        column_count = max(len(army_row), len(state_row))
+
+        merged_row: list[Any] = []
+        for column_index in range(column_count):
+            state = state_row[column_index] if column_index < len(state_row) else None
+            merged_row.append({
+                "x": column_index,
+                "y": row_index,
+                "army": army_row[column_index] if column_index < len(army_row) else None,
+                "state": state
+            })
+        merged_rows.append(merged_row)
+
+    return merged_rows
+
+
+def _sync_cells_to_state_table(board: dict[str, Any]) -> None:
+    state_table = board.get("stateTable")
+    if not isinstance(state_table, (list, tuple)):
+        return
+
+    board["cells"] = _build_cells_from_tables(board.get("armyTable"), state_table)
 
 
 def _same_game(previous_snapshot: dict[str, Any] | None, current_snapshot: dict[str, Any]) -> bool:
     if not isinstance(previous_snapshot, dict):
         return False
 
-    previous_game_id = previous_snapshot.get("gameId") or previous_snapshot.get("game_id")
-    current_game_id = current_snapshot.get("gameId") or current_snapshot.get("game_id")
-    if previous_game_id is not None and current_game_id is not None:
-        return previous_game_id == current_game_id
+    previous_game_id = previous_snapshot.get("gameId")
+    current_game_id = current_snapshot.get("gameId")
+    if previous_game_id is None or current_game_id is None:
+        return False
+
+    if previous_game_id != current_game_id:
+        return False
 
     previous_board = previous_snapshot.get("board") if isinstance(previous_snapshot.get("board"), dict) else None
     current_board = current_snapshot.get("board") if isinstance(current_snapshot.get("board"), dict) else None
@@ -76,27 +107,27 @@ def _same_game(previous_snapshot: dict[str, Any] | None, current_snapshot: dict[
         current_size = (current_board.get("width"), current_board.get("height"))
         return previous_size == current_size
 
-    return True
+    return False
 
 
 def _merge_sticky_snapshot(snapshot: dict[str, Any], previous_snapshot: dict[str, Any] | None) -> dict[str, Any]:
     merged_snapshot = deepcopy(snapshot)
-    if not _same_game(previous_snapshot, merged_snapshot):
+    current_board = merged_snapshot.get("board")
+    if not isinstance(current_board, dict):
         return merged_snapshot
 
-    if not isinstance(previous_snapshot, dict):
+    current_state_table = _extract_state_table(current_board)
+    if current_state_table is None:
         return merged_snapshot
 
-    previous_board = previous_snapshot.get("board") if isinstance(previous_snapshot.get("board"), dict) else None
-    current_board = merged_snapshot.get("board") if isinstance(merged_snapshot.get("board"), dict) else None
-    if not isinstance(previous_board, dict) or not isinstance(current_board, dict):
-        return merged_snapshot
+    same_game = _same_game(previous_snapshot, merged_snapshot)
+    if same_game and previous_snapshot is not None:
+        previous_board = previous_snapshot.get("board") if isinstance(previous_snapshot.get("board"), dict) else None
+        previous_state_table = _extract_state_table(previous_board)
+        if previous_state_table is not None:
+            current_board["stateTable"] = _merge_sticky_state_matrix(current_state_table, previous_state_table)
 
-    if "stateTable" in current_board or "stateTable" in previous_board:
-        current_board["stateTable"] = _merge_sticky_matrix(current_board.get("stateTable"), previous_board.get("stateTable"))
-
-    if "cells" in current_board or "cells" in previous_board:
-        current_board["cells"] = _merge_sticky_matrix(current_board.get("cells"), previous_board.get("cells"))
+    _sync_cells_to_state_table(current_board)
 
     return merged_snapshot
 
@@ -160,7 +191,7 @@ class BridgeStore:
                 id=self._counter,
                 receivedAt=self._now_iso(),
                 source=source or "extension",
-                gameId=merged_snapshot.get("gameId") or merged_snapshot.get("game_id"),
+                gameId=merged_snapshot.get("gameId"),
                 turn=merged_snapshot.get("turn"),
                 snapshot=deepcopy(merged_snapshot),
                 analysis=deepcopy(analysis)

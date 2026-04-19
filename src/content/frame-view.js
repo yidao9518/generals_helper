@@ -1,5 +1,5 @@
 import { formatBattleDebugSummary } from "../shared/battle-debug.js";
-import { MODE_BATTLE } from "../shared/helper-config.js";
+import helperConfig from "../shared/helper-config.js";
 import { sendRuntimeMessage } from "../shared/runtime-message.js";
 
 // noinspection JSUnusedGlobalSymbols
@@ -37,11 +37,12 @@ export function createFrameView(getDisplayMode, getBattleDisplayConfig) {
   async function loadFramesInto(container) {
     const requestId = ++latestRequestId;
     const displayMode = getDisplayMode();
-    const onlyInMatch = displayMode === MODE_BATTLE;
+    const onlyInMatch = displayMode === helperConfig.MODE_BATTLE;
+    const battleConfig = typeof getBattleDisplayConfig === "function" ? getBattleDisplayConfig() : {};
     const response = await sendRuntimeMessage({
       type: "GET_LATEST_FRAMES",
       limit: DISPLAY_FRAME_LIMIT,
-      filters: { onlyInMatch }
+      filters: { onlyInMatch, battleConfig }
     }, 1);
 
     if (requestId !== latestRequestId) {
@@ -54,23 +55,22 @@ export function createFrameView(getDisplayMode, getBattleDisplayConfig) {
     }
 
     let frames = Array.isArray(response.frames) ? response.frames : [];
-    if (displayMode === MODE_BATTLE) {
+    if (displayMode === helperConfig.MODE_BATTLE) {
       frames = frames.filter((frame) => frame?.category === "event");
     }
 
     if (!frames.length) {
-      if (displayMode === MODE_BATTLE && response.inGame) {
+      if (displayMode === helperConfig.MODE_BATTLE && response.inGame) {
         container.textContent = "游戏中，暂无可分析的战场事件...";
         return;
       }
-      container.textContent = displayMode === MODE_BATTLE
+      container.textContent = displayMode === helperConfig.MODE_BATTLE
         ? "未在游戏中"
         : "暂无原始消息";
       return;
     }
 
-    if (displayMode === MODE_BATTLE) {
-      const battleConfig = typeof getBattleDisplayConfig === "function" ? getBattleDisplayConfig() : {};
+    if (displayMode === helperConfig.MODE_BATTLE) {
       const battleDebugText = battleConfig?.showDebug ? formatBattleDebugSummary(response.battleDebug) : "";
       const battleText = frames.map(formatBattleFrame).join("\n\n");
       container.textContent = battleDebugText

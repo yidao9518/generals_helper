@@ -1,4 +1,4 @@
-import { MODE_BATTLE, MODE_RAW } from "../shared/helper-config.js";
+import helperConfig from "../shared/helper-config.js";
 
 const modeRawBtn = document.getElementById("modeRaw");
 const modeBattleBtn = document.getElementById("modeBattle");
@@ -56,12 +56,12 @@ async function openDisplayPage() {
 }
 
 function renderState(state) {
-  const mode = state?.mode === MODE_BATTLE ? MODE_BATTLE : MODE_RAW;
+  const mode = state?.mode === helperConfig.MODE_BATTLE ? helperConfig.MODE_BATTLE : helperConfig.MODE_RAW;
   const visible = Boolean(state?.visible);
   const autoRefreshEnabled = state?.autoRefreshEnabled !== false;
   const battleConfig = state?.battleConfig || {};
-  modeRawBtn.dataset.active = String(mode === MODE_RAW);
-  modeBattleBtn.dataset.active = String(mode === MODE_BATTLE);
+  modeRawBtn.dataset.active = String(mode === helperConfig.MODE_RAW);
+  modeBattleBtn.dataset.active = String(mode === helperConfig.MODE_BATTLE);
   toggleVisibleBtn.textContent = visible ? "关闭面板" : "打开面板";
   statusEl.textContent = visible ? "面板已显示" : "面板已隐藏";
   if (autoRefreshBtn instanceof HTMLInputElement) {
@@ -91,7 +91,7 @@ async function refreshState() {
 if (modeRawBtn instanceof HTMLButtonElement) {
   modeRawBtn.addEventListener("click", async () => {
     try {
-      const state = await sendToActiveTab({ type: "SET_HELPER_MODE", mode: MODE_RAW });
+      const state = await sendToActiveTab({ type: "SET_HELPER_MODE", mode: helperConfig.MODE_RAW });
       renderState(state);
     } catch {
       statusEl.textContent = "设置失败";
@@ -102,7 +102,7 @@ if (modeRawBtn instanceof HTMLButtonElement) {
 if (modeBattleBtn instanceof HTMLButtonElement) {
   modeBattleBtn.addEventListener("click", async () => {
     try {
-      const state = await sendToActiveTab({ type: "SET_HELPER_MODE", mode: MODE_BATTLE });
+      const state = await sendToActiveTab({ type: "SET_HELPER_MODE", mode: helperConfig.MODE_BATTLE });
       renderState(state);
     } catch {
       statusEl.textContent = "设置失败";

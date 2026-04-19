@@ -13,6 +13,7 @@ async function run() {
     }
   };
   const requests = [];
+  const sentMessages = [];
 
   globalThis.chrome = {
     storage: {
@@ -31,6 +32,11 @@ async function run() {
         }
       }
     }
+  };
+  globalThis.chrome.runtime = {};
+  globalThis.chrome.runtime.sendMessage = async (message) => {
+    sentMessages.push(message);
+    return { ok: true };
   };
 
   globalThis.fetch = async (url, init = {}) => {
@@ -95,6 +101,9 @@ async function run() {
   assert.equal(pushResult.ok, true);
   assert.equal(pushResult.result.analysis.summaryText, "game=match-1 | turn=2");
   assert.equal(requests[1].url, "https://127.0.0.1:8765/v1/ingest");
+  assert.equal(sentMessages.length, 1);
+  assert.equal(sentMessages[0].type, "PYTHON_BRIDGE_PUSH_SUCCEEDED");
+  assert.equal(sentMessages[0].reason, "manual");
 
   controller.reportError("boom");
   const afterError = await controller.handleMessage({ type: "GET_PYTHON_BRIDGE_STATUS" });
@@ -218,8 +227,9 @@ async function runLatestWinsTest() {
 
   assert.equal(requests.length, 2);
   const postedSnapshot = JSON.parse(requests[1].init.body);
-  assert.equal(postedSnapshot.turn, 3);
-  assert.equal(postedSnapshot.frame.battleSummary, "Turn3");
+  assert.equal(postedSnapshot.type, "battle_snapshot");
+  assert.equal(postedSnapshot.snapshot.turn, 3);
+  assert.equal(postedSnapshot.snapshot.frame.battleSummary, "Turn3");
   assert.equal(deferredBodies[0], "pushed-1");
 }
 

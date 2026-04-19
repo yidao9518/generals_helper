@@ -1,4 +1,4 @@
-import { BRIDGE_SOURCE } from "../shared/helper-config.js";
+import helperConfig from "../shared/helper-config.js";
 
 if (window.__generalsHelperWsHookInstalled) {
   // no-op
@@ -24,7 +24,7 @@ if (window.__generalsHelperWsHookInstalled) {
   function postFrame(frame) {
     window.postMessage(
       {
-        source: BRIDGE_SOURCE,
+        source: helperConfig.BRIDGE_SOURCE,
         type: "WS_FRAME_CAPTURED",
         payload: {
           ...frame,

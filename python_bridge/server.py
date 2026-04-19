@@ -76,21 +76,9 @@ def _extract_snapshot(payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
     if payload.get("type") != "battle_snapshot":
         raise ValueError("Unsupported payload type. Expected battle_snapshot.")
 
-    def looks_like_snapshot(candidate: Any) -> bool:
-        return isinstance(candidate, dict) and any(
-            key in candidate for key in ("board", "players", "frame", "battle", "gameId", "game_id", "turn")
-        )
-
     snapshot = payload.get("snapshot")
     if not isinstance(snapshot, dict):
-        if looks_like_snapshot(payload):
-            snapshot = payload
-        else:
-            battle = payload.get("battle")
-            snapshot = battle if isinstance(battle, dict) else None
-
-    if not isinstance(snapshot, dict):
-        raise ValueError("Missing snapshot object under 'snapshot' or 'battle'.")
+        raise ValueError("Missing snapshot object under 'snapshot'.")
 
     source = payload.get("source") or snapshot.get("source") or "extension"
     return snapshot, str(source)

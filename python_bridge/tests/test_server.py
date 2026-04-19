@@ -63,7 +63,8 @@ class BridgeServerTest(unittest.TestCase):
                 "board": {
                     "width": 18,
                     "height": 18,
-                    "cells": [[0, 1, 0], [2, 0, 0]]
+                    "armyTable": [[0, 1, 0], [2, 0, 0]],
+                    "stateTable": [[0, 1, 0], [2, 0, 0]]
                 }
             }
         }
@@ -113,33 +114,25 @@ class BridgeServerTest(unittest.TestCase):
             return {
                 "type": "battle_snapshot",
                 "source": "extension",
-                "gameId": game_id,
-                "matchId": game_id,
-                "inMatch": True,
-                "turn": turn,
-                "playerCount": 1,
-                "aliveCount": 1,
-                "players": [{"index": 0, "alive": True, "dead": False, "score": 12, "raw": {"score": 12}}],
-                "board": {
-                    "width": 2,
-                    "height": 2,
-                    "isComplete": True,
-                    "armyTable": [[10, 8], [6, 4]],
-                    "stateTable": [[0, state_value], [0, 0]],
-                    "cells": [
-                        [
-                            {"x": 0, "y": 0, "army": 10, "state": 0},
-                            {"x": 1, "y": 0, "army": 8, "state": state_value}
-                        ],
-                        [
-                            {"x": 0, "y": 1, "army": 6, "state": 0},
-                            {"x": 1, "y": 1, "army": 4, "state": 0}
-                        ]
-                    ],
-                    "trailingValues": []
-                },
-                "battle": {"attackIndex": 1, "mapDiff": [], "citiesDiff": [], "desertsDiff": []},
-                "frame": {"battleSummary": f"turn={turn}"}
+                "snapshot": {
+                    "gameId": game_id,
+                    "matchId": game_id,
+                    "inMatch": True,
+                    "turn": turn,
+                    "playerCount": 1,
+                    "aliveCount": 1,
+                    "players": [{"index": 0, "alive": True, "dead": False, "score": 12, "raw": {"score": 12}}],
+                    "board": {
+                        "width": 2,
+                        "height": 2,
+                        "isComplete": True,
+                        "armyTable": [[10, 8], [6, 4]],
+                        "stateTable": [[0, state_value], [0, 0]],
+                        "trailingValues": []
+                    },
+                    "battle": {"attackIndex": 1, "mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                    "frame": {"battleSummary": f"turn={turn}"}
+                }
             }
 
         first_status, first_body = self.request("POST", INGEST_PATH, make_payload(1, -2))
@@ -156,6 +149,141 @@ class BridgeServerTest(unittest.TestCase):
         latest_board = latest["record"]["snapshot"]["board"]
         self.assertEqual(latest_board["stateTable"][0][1], -2)
         self.assertEqual(latest_board["cells"][0][1]["state"], -2)
+
+    def test_state_minus_two_survives_partial_followup_snapshots(self) -> None:
+        game_id = "sticky-game-partial-001"
+
+        first_payload = {
+            "type": "battle_snapshot",
+            "source": "extension",
+            "snapshot": {
+                "gameId": game_id,
+                "matchId": game_id,
+                "inMatch": True,
+                "turn": 1,
+                "playerCount": 1,
+                "aliveCount": 1,
+                "players": [{"index": 0, "alive": True, "dead": False, "score": 12, "raw": {"score": 12}}],
+                "board": {
+                    "width": 2,
+                    "height": 2,
+                    "isComplete": True,
+                    "armyTable": [[10, 8], [6, 4]],
+                    "stateTable": [[0, -2], [0, 0]],
+                    "trailingValues": []
+                },
+                "battle": {"attackIndex": 1, "mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                "frame": {"battleSummary": "turn=1"}
+            }
+        }
+
+        partial_payload = {
+            "type": "battle_snapshot",
+            "source": "extension",
+            "snapshot": {
+                "gameId": game_id,
+                "matchId": game_id,
+                "inMatch": True,
+                "turn": 2,
+                "playerCount": 1,
+                "aliveCount": 1,
+                "players": [{"index": 0, "alive": True, "dead": False, "score": 12, "raw": {"score": 12}}],
+                "board": {
+                    "width": 2,
+                    "height": 2,
+                    "isComplete": True,
+                    "armyTable": [[10]],
+                    "stateTable": [[0]],
+                    "trailingValues": []
+                },
+                "battle": {"attackIndex": 1, "mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                "frame": {"battleSummary": "turn=2"}
+            }
+        }
+
+        first_status, first_body = self.request("POST", INGEST_PATH, first_payload)
+        self.assertEqual(first_status, 201)
+        self.assertTrue(first_body["ok"])
+
+        second_status, second_body = self.request("POST", INGEST_PATH, partial_payload)
+        self.assertEqual(second_status, 201)
+        self.assertTrue(second_body["ok"])
+
+        latest_status, latest = self.request("GET", LATEST_PATH)
+        self.assertEqual(latest_status, 200)
+        self.assertTrue(latest["ok"])
+        latest_board = latest["record"]["snapshot"]["board"]
+        self.assertEqual(latest_board["stateTable"][0][1], -2)
+        self.assertEqual(latest_board["stateTable"][1][1], 0)
+        self.assertEqual(latest_board["cells"][0][1]["state"], -2)
+        self.assertEqual(latest_board["cells"][1][1]["state"], 0)
+
+    def test_state_table_is_authoritative_for_cells(self) -> None:
+        game_id = "state-table-authoritative-001"
+
+        payload = {
+            "type": "battle_snapshot",
+            "source": "extension",
+            "snapshot": {
+                "gameId": game_id,
+                "matchId": game_id,
+                "inMatch": True,
+                "turn": 1,
+                "playerCount": 1,
+                "aliveCount": 1,
+                "players": [{"index": 0, "alive": True, "dead": False, "score": 12, "raw": {"score": 12}}],
+                "board": {
+                    "width": 2,
+                    "height": 2,
+                    "isComplete": True,
+                    "armyTable": [[10, 8], [6, 4]],
+                    "stateTable": [[0, -2], [0, 0]],
+                    "trailingValues": []
+                },
+                "battle": {"attackIndex": 1, "mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                "frame": {"battleSummary": "turn=1"}
+            }
+        }
+
+        status, body = self.request("POST", INGEST_PATH, payload)
+        self.assertEqual(status, 201)
+        self.assertTrue(body["ok"])
+
+        latest_status, latest = self.request("GET", LATEST_PATH)
+        self.assertEqual(latest_status, 200)
+        self.assertTrue(latest["ok"])
+        latest_board = latest["record"]["snapshot"]["board"]
+        self.assertEqual(latest_board["stateTable"][0][1], -2)
+        self.assertEqual(latest_board["cells"][0][1]["state"], -2)
+        self.assertEqual(latest_board["cells"][0][1]["army"], 8)
+
+    def test_rejects_legacy_snapshot_shapes(self) -> None:
+        for payload in (
+            {
+                "type": "battle_snapshot",
+                "source": "extension",
+                "board": {
+                    "width": 2,
+                    "height": 2,
+                    "stateTable": [[0, 1], [0, 0]]
+                }
+            },
+            {
+                "type": "battle_snapshot",
+                "source": "extension",
+                "battle": {
+                    "board": {
+                        "width": 2,
+                        "height": 2,
+                        "stateTable": [[0, 1], [0, 0]]
+                    }
+                }
+            }
+        ):
+            status, body = self.request("POST", INGEST_PATH, payload)
+            self.assertEqual(status, 400)
+            self.assertFalse(body["ok"])
+            self.assertIn("snapshot", body["error"])
 
     def test_analyzer_handles_missing_fields(self) -> None:
         analysis = analyze_snapshot({})

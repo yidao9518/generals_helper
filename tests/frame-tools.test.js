@@ -333,6 +333,11 @@ function run() {
     trailingValues: []
   });
 
+  const stickySeedState = buildBattleMapState([3, 2, 10, 11, 12, 13, 14, 15, 1, -2, 3, 4, 5, 6]);
+  const stickyMergedState = applyBattleUpdateToBattleMapState(stickySeedState, nextUpdate);
+  assert.equal(stickyMergedState.stateTable[0][1], -2);
+  assert.equal(stickyMergedState.stateTable[1][1], 5);
+
   console.log("frame-tools tests passed");
 }
 

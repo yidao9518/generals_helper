@@ -1,3 +1,4 @@
+import { setTextContent } from "../shared/dom-utils.js";
 import { loadPythonBridgeConfig, pingPythonBridge, savePythonBridgeConfig } from "../shared/python-bridge.js";
 
 const enabledEl = document.getElementById("pythonBridgeEnabled");
@@ -24,14 +25,6 @@ function formatTimestamp(value) {
     return value;
   }
   return date.toLocaleString();
-}
-
-function setText(el, value, fallback = "暂无") {
-  if (!(el instanceof HTMLElement)) {
-    return;
-  }
-  el.textContent = typeof value === "string" && value.trim() ? value : fallback;
-  el.classList.toggle("bridge-muted", !value || !String(value).trim());
 }
 
 function formatBridgeError(value) {
@@ -64,11 +57,11 @@ function renderBridgeDetails(status, config) {
   const mergedStatus = status || {};
 
   const serviceOk = mergedStatus.lastStatus ? `已连接（HTTPS ${mergedStatus.lastStatus}）` : (config.enabled ? "未检测，点击测试连接或等待自动检查" : "已关闭");
-  setText(bridgeServiceStatusEl, serviceOk, "尚未连接本地 Python 服务。");
-  setText(bridgeLastPushAtEl, formatTimestamp(mergedStatus.lastPushAt), "未记录");
-  setText(bridgeLastHealthCheckAtEl, formatTimestamp(mergedStatus.lastHealthCheckAt), "未记录");
-  setText(bridgeLastErrorEl, formatBridgeError(mergedStatus.lastError), "暂无");
-  setText(bridgeLastAnalysisEl, formatAnalysisSummary(mergedStatus), "暂无");
+  setTextContent(bridgeServiceStatusEl, serviceOk, { fallback: "尚未连接本地 Python 服务。", mutedClass: "bridge-muted" });
+  setTextContent(bridgeLastPushAtEl, formatTimestamp(mergedStatus.lastPushAt), { fallback: "未记录", mutedClass: "bridge-muted" });
+  setTextContent(bridgeLastHealthCheckAtEl, formatTimestamp(mergedStatus.lastHealthCheckAt), { fallback: "未记录", mutedClass: "bridge-muted" });
+  setTextContent(bridgeLastErrorEl, formatBridgeError(mergedStatus.lastError), { fallback: "暂无", mutedClass: "bridge-muted" });
+  setTextContent(bridgeLastAnalysisEl, formatAnalysisSummary(mergedStatus), { fallback: "暂无", mutedClass: "bridge-muted" });
 
   const suffixParts = [];
   if (config.enabled) {
@@ -94,6 +87,10 @@ function syncBridgeControls(config) {
 async function persistBridgeConfig(partial) {
   currentConfig = await savePythonBridgeConfig({ ...(currentConfig || {}), ...partial });
   syncBridgeControls(currentConfig);
+  void chrome.runtime.sendMessage({
+    type: "PYTHON_BRIDGE_CONFIG_UPDATED",
+    config: currentConfig
+  }).catch(() => null);
   return currentConfig;
 }
 

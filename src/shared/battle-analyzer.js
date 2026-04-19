@@ -1,6 +1,6 @@
 import { buildBattleMapState, isPositiveInteger } from "./battle-map-state.js";
 import { applySkipCountMapDiff, formatBattleUpdateMapDiff, parseSkipCountMapDiff } from "./battle-map-diff.js";
-import { BATTLE_DISPLAY_CONFIG } from "./helper-config.js";
+import helperConfig from "./helper-config.js";
 
 export { buildBattleMapState, parseSkipCountMapDiff, applySkipCountMapDiff };
 
@@ -69,7 +69,8 @@ export function applyBattleUpdateToBattleMapState(previousState, update) {
   }
 
   if (update.mapDiffInitial) {
-    return buildBattleMapState(update.mapDiffInitial.values);
+    const nextState = buildBattleMapState(update.mapDiffInitial.values);
+    return mergeStickyBattleMapState(previousState, nextState);
   }
 
   const baseValues = Array.isArray(previousState)
@@ -87,7 +88,45 @@ export function applyBattleUpdateToBattleMapState(previousState, update) {
     return null;
   }
 
-  return buildBattleMapState(nextValues);
+  const nextState = buildBattleMapState(nextValues);
+  return mergeStickyBattleMapState(previousState, nextState);
+}
+
+function mergeStickyBattleMapState(previousState, nextState) {
+  if (!previousState || !nextState) {
+    return nextState;
+  }
+
+  const previousValues = Array.isArray(previousState.values) ? previousState.values : null;
+  const nextValues = Array.isArray(nextState.values) ? nextState.values.slice() : null;
+  if (!previousValues || !nextValues) {
+    return nextState;
+  }
+
+  if (previousState.width !== nextState.width || previousState.height !== nextState.height) {
+    return nextState;
+  }
+
+  const cellCount = Number.isInteger(nextState.cellCount) && nextState.cellCount > 0
+    ? nextState.cellCount
+    : previousState.cellCount;
+  if (!Number.isInteger(cellCount) || cellCount <= 0) {
+    return nextState;
+  }
+
+  const stateOffset = 2 + cellCount;
+  for (let index = 0; index < cellCount; index += 1) {
+    const valueIndex = stateOffset + index;
+    const currentState = nextValues[valueIndex];
+    const previousStateValue = previousValues[valueIndex];
+    if (currentState === -2 || previousStateValue === -2) {
+      nextValues[valueIndex] = -2;
+    } else if (currentState === undefined && previousStateValue !== undefined) {
+      nextValues[valueIndex] = previousStateValue;
+    }
+  }
+
+  return buildBattleMapState(nextValues) || nextState;
 }
 
 export function parseBattleUpdate(payload) {
@@ -128,11 +167,11 @@ export function formatBattleUpdate(update, displayConfig = {}, battleMapState = 
 
   const resolvedConfig = displayConfig || {};
   const {
-    showTurn = BATTLE_DISPLAY_CONFIG.showTurn,
-    showPlayers = BATTLE_DISPLAY_CONFIG.showPlayers,
-    showMapDiff = BATTLE_DISPLAY_CONFIG.showMapDiff,
-    showCitiesDiff = BATTLE_DISPLAY_CONFIG.showCitiesDiff,
-    showDesertsDiff = BATTLE_DISPLAY_CONFIG.showDesertsDiff
+    showTurn = helperConfig.BATTLE_DISPLAY_CONFIG.showTurn,
+    showPlayers = helperConfig.BATTLE_DISPLAY_CONFIG.showPlayers,
+    showMapDiff = helperConfig.BATTLE_DISPLAY_CONFIG.showMapDiff,
+    showCitiesDiff = helperConfig.BATTLE_DISPLAY_CONFIG.showCitiesDiff,
+    showDesertsDiff = helperConfig.BATTLE_DISPLAY_CONFIG.showDesertsDiff
   } = resolvedConfig;
 
   const parts = [];

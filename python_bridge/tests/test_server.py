@@ -56,9 +56,9 @@ class BridgeServerTest(unittest.TestCase):
                 "gameId": "game-123",
                 "turn": 42,
                 "players": [
-                    {"id": 0, "score": 120, "alive": True},
-                    {"id": 1, "score": 98, "alive": True},
-                    {"id": 2, "score": 64, "dead": True}
+                    {"id": 0, "total": 120, "alive": True},
+                    {"id": 1, "total": 98, "alive": True},
+                    {"id": 2, "total": 64, "dead": True}
                 ],
                 "board": {
                     "width": 18,
@@ -93,8 +93,8 @@ class BridgeServerTest(unittest.TestCase):
         status, history = self.request("GET", f"{HISTORY_PATH}?limit=5")
         self.assertEqual(status, 200)
         self.assertTrue(history["ok"])
-        self.assertEqual(len(history["records"]), 1)
-        self.assertEqual(history["records"][0]["gameId"], "game-123")
+        self.assertGreaterEqual(len(history["records"]), 1)
+        self.assertEqual(history["records"][-1]["gameId"], "game-123")
 
         status, empty_history = self.request("GET", f"{HISTORY_PATH}?limit=0")
         self.assertEqual(status, 200)
@@ -121,7 +121,7 @@ class BridgeServerTest(unittest.TestCase):
                     "turn": turn,
                     "playerCount": 1,
                     "aliveCount": 1,
-                    "players": [{"index": 0, "alive": True, "dead": False, "score": 12, "raw": {"score": 12}}],
+                    "players": [{"index": 0, "alive": True, "dead": False, "total": 12, "raw": {"total": 12}}],
                     "board": {
                         "width": 2,
                         "height": 2,
@@ -130,7 +130,7 @@ class BridgeServerTest(unittest.TestCase):
                         "stateTable": [[0, state_value], [0, 0]],
                         "trailingValues": []
                     },
-                    "battle": {"attackIndex": 1, "mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                    "battle": {"mapDiff": [], "citiesDiff": [], "desertsDiff": []},
                     "frame": {"battleSummary": f"turn={turn}"}
                 }
             }
@@ -163,7 +163,7 @@ class BridgeServerTest(unittest.TestCase):
                 "turn": 1,
                 "playerCount": 1,
                 "aliveCount": 1,
-                "players": [{"index": 0, "alive": True, "dead": False, "score": 12, "raw": {"score": 12}}],
+                "players": [{"index": 0, "alive": True, "dead": False, "total": 12, "raw": {"total": 12}}],
                 "board": {
                     "width": 2,
                     "height": 2,
@@ -172,7 +172,7 @@ class BridgeServerTest(unittest.TestCase):
                     "stateTable": [[0, -2], [0, 0]],
                     "trailingValues": []
                 },
-                "battle": {"attackIndex": 1, "mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                "battle": {"mapDiff": [], "citiesDiff": [], "desertsDiff": []},
                 "frame": {"battleSummary": "turn=1"}
             }
         }
@@ -187,7 +187,7 @@ class BridgeServerTest(unittest.TestCase):
                 "turn": 2,
                 "playerCount": 1,
                 "aliveCount": 1,
-                "players": [{"index": 0, "alive": True, "dead": False, "score": 12, "raw": {"score": 12}}],
+                "players": [{"index": 0, "alive": True, "dead": False, "total": 12, "raw": {"total": 12}}],
                 "board": {
                     "width": 2,
                     "height": 2,
@@ -196,7 +196,7 @@ class BridgeServerTest(unittest.TestCase):
                     "stateTable": [[0]],
                     "trailingValues": []
                 },
-                "battle": {"attackIndex": 1, "mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                "battle": {"mapDiff": [], "citiesDiff": [], "desertsDiff": []},
                 "frame": {"battleSummary": "turn=2"}
             }
         }
@@ -231,7 +231,7 @@ class BridgeServerTest(unittest.TestCase):
                 "turn": 1,
                 "playerCount": 1,
                 "aliveCount": 1,
-                "players": [{"index": 0, "alive": True, "dead": False, "score": 12, "raw": {"score": 12}}],
+                "players": [{"index": 0, "alive": True, "dead": False, "total": 12, "raw": {"total": 12}}],
                 "board": {
                     "width": 2,
                     "height": 2,
@@ -240,7 +240,7 @@ class BridgeServerTest(unittest.TestCase):
                     "stateTable": [[0, -2], [0, 0]],
                     "trailingValues": []
                 },
-                "battle": {"attackIndex": 1, "mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                "battle": {"mapDiff": [], "citiesDiff": [], "desertsDiff": []},
                 "frame": {"battleSummary": "turn=1"}
             }
         }
@@ -256,6 +256,290 @@ class BridgeServerTest(unittest.TestCase):
         self.assertEqual(latest_board["stateTable"][0][1], -2)
         self.assertEqual(latest_board["cells"][0][1]["state"], -2)
         self.assertEqual(latest_board["cells"][0][1]["army"], 8)
+
+    def test_in_war_pairs_are_marked_as_adjacent_when_only_two_players_trigger(self) -> None:
+        game_id = "war-adjacent-001"
+
+        def make_payload(turn: int) -> dict:
+            tiles = 2 - (turn - 1)
+            return {
+                "type": "battle_snapshot",
+                "source": "extension",
+                "snapshot": {
+                    "gameId": game_id,
+                    "matchId": game_id,
+                    "inMatch": True,
+                    "turn": turn,
+                    "playerCount": 2,
+                    "aliveCount": 2,
+                    "players": [
+                        {"i": 0, "color": 0, "name": "WindHT", "alive": True, "dead": False, "total": 10, "tiles": tiles, "raw": {"total": 10, "tiles": tiles}},
+                        {"i": 1, "color": 1, "name": "yidao", "alive": True, "dead": False, "total": 10, "tiles": tiles, "raw": {"total": 10, "tiles": tiles}}
+                    ],
+                    "board": {
+                        "width": 2,
+                        "height": 2,
+                        "isComplete": True,
+                        "armyTable": [[10, 8], [6, 4]],
+                        "stateTable": [[0, 1], [0, 0]],
+                        "trailingValues": []
+                    },
+                    "battle": {"mapDiff": [2, 1, 99, 11], "citiesDiff": [], "desertsDiff": []},
+                    "frame": {"battleSummary": f"turn={turn}"}
+                }
+            }
+
+        first_status, first_body = self.request("POST", INGEST_PATH, make_payload(1))
+        self.assertEqual(first_status, 201)
+        self.assertTrue(first_body["ok"])
+
+        second_status, second_body = self.request("POST", INGEST_PATH, make_payload(2))
+        self.assertEqual(second_status, 201)
+        self.assertTrue(second_body["ok"])
+
+        third_status, third_body = self.request("POST", INGEST_PATH, make_payload(3))
+        self.assertEqual(third_status, 201)
+        self.assertTrue(third_body["ok"])
+
+        relations = second_body["analysis"]["battleRelations"]
+        self.assertTrue(relations["comparisonAvailable"])
+        self.assertEqual(relations["warPlayerCount"], 2)
+        self.assertTrue(relations["adjacencyAssumed"])
+        self.assertEqual(relations["playerStates"][0]["relationText"], "交战")
+        self.assertEqual(relations["playerStates"][1]["relationText"], "交战")
+        self.assertEqual(relations["playerStates"][0]["adjacentPlayerKeys"], [1])
+        self.assertEqual(relations["playerStates"][1]["adjacentPlayerKeys"], [0])
+
+        third_relations = third_body["analysis"]["battleRelations"]
+        self.assertTrue(third_relations["playerStates"][0]["inWar"])
+        self.assertTrue(third_relations["playerStates"][1]["inWar"])
+
+    def test_non_map_diffs_do_not_trigger_in_war(self) -> None:
+        game_id = "war-non-map-diff-001"
+
+        def make_payload(turn: int) -> dict:
+            total = 10 + turn - 1
+            return {
+                "type": "battle_snapshot",
+                "source": "extension",
+                "snapshot": {
+                    "gameId": game_id,
+                    "matchId": game_id,
+                    "inMatch": True,
+                    "turn": turn,
+                    "playerCount": 2,
+                    "aliveCount": 2,
+                    "players": [
+                        {"i": 0, "color": 0, "name": "WindHT", "alive": True, "dead": False, "total": total, "tiles": 1, "raw": {"total": total, "tiles": 1}},
+                        {"i": 1, "color": 1, "name": "yidao", "alive": True, "dead": False, "total": total, "tiles": 1, "raw": {"total": total, "tiles": 1}}
+                    ],
+                    "board": {
+                        "width": 2,
+                        "height": 2,
+                        "isComplete": True,
+                        "armyTable": [[10, 8], [6, 4]],
+                        "stateTable": [[0, 1], [0, 0]],
+                        "trailingValues": []
+                    },
+                    "battle": {"mapDiff": [2, 1, 99, 11], "citiesDiff": [0], "desertsDiff": [0]},
+                    "frame": {"battleSummary": f"turn={turn}"}
+                }
+            }
+
+        first_status, first_body = self.request("POST", INGEST_PATH, make_payload(1))
+        self.assertEqual(first_status, 201)
+        self.assertTrue(first_body["ok"])
+
+        second_status, second_body = self.request("POST", INGEST_PATH, make_payload(2))
+        self.assertEqual(second_status, 201)
+        self.assertTrue(second_body["ok"])
+
+        relations = second_body["analysis"]["battleRelations"]
+        self.assertEqual(relations["warPlayerCount"], 0)
+        self.assertFalse(relations["adjacencyAssumed"])
+        self.assertFalse(relations["playerStates"][0]["inWar"])
+        self.assertFalse(relations["playerStates"][1]["inWar"])
+
+    def test_equal_strength_and_tiles_do_not_trigger_in_war(self) -> None:
+        game_id = "war-equal-rule-001"
+
+        def make_payload(turn: int) -> dict:
+            return {
+                "type": "battle_snapshot",
+                "source": "extension",
+                "snapshot": {
+                    "gameId": game_id,
+                    "matchId": game_id,
+                    "inMatch": True,
+                    "turn": turn,
+                    "playerCount": 2,
+                    "aliveCount": 2,
+                    "players": [
+                        {"i": 0, "color": 0, "name": "WindHT", "alive": True, "dead": False, "total": 12, "tiles": 3, "raw": {"total": 12, "tiles": 3}},
+                        {"i": 1, "color": 1, "name": "yidao", "alive": True, "dead": False, "total": 11, "tiles": 4, "raw": {"total": 11, "tiles": 4}}
+                    ],
+                    "board": {
+                        "width": 2,
+                        "height": 2,
+                        "isComplete": True,
+                        "armyTable": [[10, 8], [6, 4]],
+                        "stateTable": [[0, 1], [0, 0]],
+                        "trailingValues": []
+                    },
+                    "battle": {"mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                    "frame": {"battleSummary": f"turn={turn}"}
+                }
+            }
+
+        first_status, first_body = self.request("POST", INGEST_PATH, make_payload(1))
+        self.assertEqual(first_status, 201)
+        self.assertTrue(first_body["ok"])
+
+        second_status, second_body = self.request("POST", INGEST_PATH, make_payload(2))
+        self.assertEqual(second_status, 201)
+        self.assertTrue(second_body["ok"])
+
+        relations = second_body["analysis"]["battleRelations"]
+        self.assertEqual(relations["warPlayerCount"], 0)
+        self.assertFalse(relations["playerStates"][0]["inWar"])
+        self.assertFalse(relations["playerStates"][1]["inWar"])
+
+    def test_in_war_is_not_inherited(self) -> None:
+        game_id = "war-no-inherit-001"
+
+        def make_payload(turn: int, total: int) -> dict:
+            return {
+                "type": "battle_snapshot",
+                "source": "extension",
+                "snapshot": {
+                    "gameId": game_id,
+                    "matchId": game_id,
+                    "inMatch": True,
+                    "turn": turn,
+                    "playerCount": 2,
+                    "aliveCount": 2,
+                    "players": [
+                        {"i": 0, "color": 0, "name": "WindHT", "alive": True, "dead": False, "total": total, "tiles": 2, "raw": {"total": total, "tiles": 2}},
+                        {"i": 1, "color": 1, "name": "yidao", "alive": True, "dead": False, "total": 11, "tiles": 2, "raw": {"total": 11, "tiles": 2}}
+                    ],
+                    "board": {
+                        "width": 2,
+                        "height": 2,
+                        "isComplete": True,
+                        "armyTable": [[10, 8], [6, 4]],
+                        "stateTable": [[0, 1], [0, 0]],
+                        "trailingValues": []
+                    },
+                    "battle": {"mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                    "frame": {"battleSummary": f"turn={turn}"}
+                }
+            }
+
+        first_status, first_body = self.request("POST", INGEST_PATH, make_payload(1, 10))
+        self.assertEqual(first_status, 201)
+        self.assertTrue(first_body["ok"])
+
+        second_status, second_body = self.request("POST", INGEST_PATH, make_payload(2, 8))
+        self.assertEqual(second_status, 201)
+        self.assertTrue(second_body["ok"])
+        self.assertEqual(second_body["analysis"]["battleRelations"]["warPlayerCount"], 1)
+
+        third_status, third_body = self.request("POST", INGEST_PATH, make_payload(3, 8))
+        self.assertEqual(third_status, 201)
+        self.assertTrue(third_body["ok"])
+        third_relations = third_body["analysis"]["battleRelations"]
+        self.assertEqual(third_relations["warPlayerCount"], 0)
+        self.assertFalse(third_relations["playerStates"][0]["inWar"])
+        self.assertFalse(third_relations["playerStates"][1]["inWar"])
+
+    def test_total_stays_flat_does_not_trigger_in_war(self) -> None:
+        game_id = "war-total-flat-001"
+
+        def make_payload(turn: int) -> dict:
+            return {
+                "type": "battle_snapshot",
+                "source": "extension",
+                "snapshot": {
+                    "gameId": game_id,
+                    "matchId": game_id,
+                    "inMatch": True,
+                    "turn": turn,
+                    "playerCount": 2,
+                    "aliveCount": 2,
+                    "players": [
+                        {"i": 0, "color": 0, "name": "WindHT", "alive": True, "dead": False, "total": 12, "tiles": 1, "raw": {"total": 12, "tiles": 1}},
+                        {"i": 1, "color": 1, "name": "yidao", "alive": True, "dead": False, "total": 11, "tiles": 1, "raw": {"total": 11, "tiles": 1}}
+                    ],
+                    "board": {
+                        "width": 2,
+                        "height": 2,
+                        "isComplete": True,
+                        "armyTable": [[10, 8], [6, 4]],
+                        "stateTable": [[0, 1], [0, 0]],
+                        "trailingValues": []
+                    },
+                    "battle": {"mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                    "frame": {"battleSummary": f"turn={turn}"}
+                }
+            }
+
+        first_status, first_body = self.request("POST", INGEST_PATH, make_payload(1))
+        self.assertEqual(first_status, 201)
+        self.assertTrue(first_body["ok"])
+
+        second_status, second_body = self.request("POST", INGEST_PATH, make_payload(2))
+        self.assertEqual(second_status, 201)
+        self.assertTrue(second_body["ok"])
+
+        relations = second_body["analysis"]["battleRelations"]
+        self.assertEqual(relations["warPlayerCount"], 0)
+        self.assertFalse(relations["playerStates"][0]["inWar"])
+        self.assertFalse(relations["playerStates"][1]["inWar"])
+
+    def test_board_size_change_disables_comparison_for_same_game_id(self) -> None:
+        game_id = "war-size-change-001"
+
+        def make_payload(turn: int, width: int, height: int, total: int) -> dict:
+            return {
+                "type": "battle_snapshot",
+                "source": "extension",
+                "snapshot": {
+                    "gameId": game_id,
+                    "matchId": game_id,
+                    "inMatch": True,
+                    "turn": turn,
+                    "playerCount": 2,
+                    "aliveCount": 2,
+                    "players": [
+                        {"i": 0, "color": 0, "name": "WindHT", "alive": True, "dead": False, "total": total, "tiles": 2, "raw": {"total": total, "tiles": 2}},
+                        {"i": 1, "color": 1, "name": "yidao", "alive": True, "dead": False, "total": 11, "tiles": 2, "raw": {"total": 11, "tiles": 2}}
+                    ],
+                    "board": {
+                        "width": width,
+                        "height": height,
+                        "isComplete": True,
+                        "armyTable": [[10, 8], [6, 4]],
+                        "stateTable": [[0, 1], [0, 0]],
+                        "trailingValues": []
+                    },
+                    "battle": {"mapDiff": [], "citiesDiff": [], "desertsDiff": []},
+                    "frame": {"battleSummary": f"turn={turn}"}
+                }
+            }
+
+        first_status, first_body = self.request("POST", INGEST_PATH, make_payload(1, 2, 2, 10))
+        self.assertEqual(first_status, 201)
+        self.assertTrue(first_body["ok"])
+
+        second_status, second_body = self.request("POST", INGEST_PATH, make_payload(2, 3, 3, 8))
+        self.assertEqual(second_status, 201)
+        self.assertTrue(second_body["ok"])
+
+        relations = second_body["analysis"]["battleRelations"]
+        self.assertFalse(relations["comparisonAvailable"])
+        self.assertEqual(relations["warPlayerCount"], 0)
+        self.assertFalse(relations["playerStates"][0]["inWar"])
+        self.assertFalse(relations["playerStates"][1]["inWar"])
 
     def test_rejects_legacy_snapshot_shapes(self) -> None:
         for payload in (

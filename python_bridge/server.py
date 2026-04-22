@@ -141,8 +141,11 @@ def make_handler(store: BridgeStore) -> type[BaseHTTPRequestHandler]:
             try:
                 payload = _read_json_body(self)
                 snapshot, source = _extract_snapshot(payload)
-                snapshot = store.prepare_snapshot(snapshot)
-                analysis = analyze_snapshot(snapshot)
+                previous_record = store.latest()
+                previous_snapshot = previous_record.snapshot if previous_record else None
+                previous_analysis = previous_record.analysis if previous_record else None
+                prepared_snapshot = store.prepare_snapshot(snapshot)
+                analysis = analyze_snapshot(prepared_snapshot, previous_snapshot=previous_snapshot, previous_analysis=previous_analysis)
                 record = store.add(source=source, snapshot=snapshot, analysis=analysis)
             except ValueError as exc:
                 _error(self, HTTPStatus.BAD_REQUEST, str(exc))

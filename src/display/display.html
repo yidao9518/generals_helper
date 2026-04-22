@@ -80,6 +80,31 @@
         color: #f8fafc;
         word-break: break-word;
       }
+      .debug-panel {
+        background: #111827;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 10px;
+        display: none;
+      }
+      .debug-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      .debug-panel .label {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-bottom: 0;
+      }
+      .debug-panel .value {
+        font-size: 12px;
+        color: #cbd5e1;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
       .board-panel {
         background: #111827;
         border: 1px solid #334155;
@@ -270,6 +295,32 @@
         flex-direction: column;
         gap: 8px;
       }
+      .player-meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+      .player-meta-label {
+        flex: 0 0 auto;
+      }
+      .player-relation-list {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        flex-wrap: wrap;
+      }
+      .player-relation-chip {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        flex: 0 0 auto;
+        box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.45);
+      }
+      .player-relation-empty {
+        color: #94a3b8;
+      }
       .player-card {
         position: relative;
         overflow: hidden;
@@ -278,6 +329,13 @@
         border-left: 4px solid var(--player-accent, #334155);
         border-radius: 8px;
         padding: 10px;
+      }
+      .player-card--war {
+        border-left-color: #ef4444;
+      }
+      /* In simple mode, show a red glow for players in war instead of a status label */
+      .player-card--simple.player-card--war {
+        box-shadow: 0 0 10px rgba(239, 68, 68, 0.45), inset 0 0 6px rgba(239, 68, 68, 0.12);
       }
       .player-card--dead::after {
         content: "";
@@ -288,6 +346,9 @@
         opacity: 0.95;
       }
       .player-card--simple {
+        display: flex;
+        align-items: center;
+        gap: 12px;
         padding-top: 8px;
         padding-bottom: 8px;
       }
@@ -301,6 +362,7 @@
       .player-card--simple .player-card-header {
         justify-content: flex-start;
         margin-bottom: 0;
+        flex: 0 0 auto;
       }
       .player-title-group {
         display: flex;
@@ -332,8 +394,27 @@
         font-size: 11px;
         color: #cbd5e1;
       }
+      .player-card--simple .player-meta {
+        display: flex;
+        align-items: center;
+        flex: 1 1 auto;
+        gap: 12px;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+      }
       .player-meta span {
         word-break: break-word;
+      }
+      .player-card--simple .player-meta-item {
+        flex: 0 0 auto;
+        min-width: 0;
+      }
+      .player-card--simple .player-relation-list {
+        flex-wrap: nowrap;
+      }
+      .player-card--simple .player-meta span {
+        white-space: nowrap;
       }
       .player-raw {
         margin-top: 8px;
@@ -341,6 +422,9 @@
         color: #94a3b8;
         word-break: break-word;
         white-space: pre-wrap;
+      }
+      .player-card--simple .player-raw {
+        display: none;
       }
       .player-empty {
         color: #94a3b8;
@@ -371,9 +455,21 @@
         <div id="playersValue" class="value muted">暂无</div>
       </div>
       <div class="card">
-        <div class="label">最新摘要</div>
-        <div id="summaryValue" class="value muted">暂无</div>
+        <div class="label">城市变化</div>
+        <div id="citiesDiffValue" class="value muted">暂无</div>
       </div>
+      <div class="card">
+        <div class="label">沙漠变化</div>
+        <div id="desertsDiffValue" class="value muted">暂无</div>
+      </div>
+    </div>
+
+    <div id="debugPanel" class="debug-panel">
+      <div class="debug-panel-header">
+        <div class="label">调试</div>
+        <button id="debugCopyBtn" type="button">复制调试</button>
+      </div>
+      <div id="debugValue" class="value muted">暂无</div>
     </div>
 
     <section class="battle-row">
@@ -402,7 +498,6 @@
         <div class="board-header">
           <div class="board-header-left">
             <h2>玩家信息</h2>
-            <label class="toolbar-toggle"><input id="simpleMode" type="checkbox" /> 简约模式</label>
           </div>
           <div id="playerMeta" class="meta">未加载</div>
         </div>

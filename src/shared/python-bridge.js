@@ -1,10 +1,18 @@
 import { parseBattleUpdate } from "./battle-analyzer.js";
+import helperConfig from "./helper-config.js";
 
 export const PYTHON_BRIDGE_STORAGE_KEY = "pythonBridge";
 export const DEFAULT_PYTHON_BRIDGE_CONFIG = {
   enabled: true,
   autoPush: true,
   simpleMode: false,
+  showDebug: false,
+  // battlefield display flags - default to helperConfig values when available
+  showTurn: helperConfig?.BATTLE_DISPLAY_CONFIG?.showTurn === true,
+  showPlayers: helperConfig?.BATTLE_DISPLAY_CONFIG?.showPlayers === true,
+  showMapDiff: helperConfig?.BATTLE_DISPLAY_CONFIG?.showMapDiff === true,
+  showCitiesDiff: helperConfig?.BATTLE_DISPLAY_CONFIG?.showCitiesDiff === true,
+  showDesertsDiff: helperConfig?.BATTLE_DISPLAY_CONFIG?.showDesertsDiff === true,
   url: "https://127.0.0.1:8765",
   timeoutMs: 2500
 };
@@ -25,12 +33,12 @@ function toPositiveInteger(value, fallback) {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
-function pickNumericScore(player) {
+function pickNumericValue(player) {
   if (!player || typeof player !== "object") {
     return null;
   }
 
-  const preferredKeys = ["score", "total", "tiles", "army", "land", "cells", "value", "count"];
+  const preferredKeys = ["total", "tiles", "cells", "value", "count"];
   for (const key of preferredKeys) {
     if (typeof player[key] === "number" && Number.isFinite(player[key])) {
       return player[key];
@@ -46,8 +54,8 @@ function pickNumericScore(player) {
   return null;
 }
 
-function normalizePlayers(scores, playerMeta = null) {
-  if (!Array.isArray(scores)) {
+function normalizePlayers(playerEntries, playerMeta = null) {
+  if (!Array.isArray(playerEntries)) {
     return [];
   }
 
@@ -60,10 +68,10 @@ function normalizePlayers(scores, playerMeta = null) {
   }
   const selfIndex = Number.isInteger(playerMeta?.playerIndex) ? playerMeta.playerIndex : null;
 
-  return scores.map((player, index) => {
+  return playerEntries.map((player, index) => {
     const rawPlayer = player && typeof player === "object" ? { ...player } : { value: player };
-    const scoreIndex = Number.isInteger(rawPlayer.i) ? rawPlayer.i : index;
-    const metaPlayer = metaPlayersByIndex.get(scoreIndex) || (metaPlayers[index] && typeof metaPlayers[index] === "object" ? metaPlayers[index] : null);
+    const entryIndex = Number.isInteger(rawPlayer.i) ? rawPlayer.i : index;
+    const metaPlayer = metaPlayersByIndex.get(entryIndex) || (metaPlayers[index] && typeof metaPlayers[index] === "object" ? metaPlayers[index] : null);
     const playerIndex = Number.isInteger(metaPlayer?.i) ? metaPlayer.i : (Number.isInteger(rawPlayer.i) ? rawPlayer.i : index);
     const color = Number.isInteger(metaPlayer?.color) ? metaPlayer.color : (Number.isInteger(rawPlayer.color) ? rawPlayer.color : null);
     const name = typeof metaPlayer?.name === "string" && metaPlayer.name.trim()
@@ -77,7 +85,7 @@ function normalizePlayers(scores, playerMeta = null) {
       isSelf: selfIndex === null ? null : playerIndex === selfIndex,
       alive: rawPlayer.dead !== true && rawPlayer.alive !== false,
       dead: Boolean(rawPlayer.dead),
-      score: pickNumericScore(rawPlayer),
+      total: pickNumericValue(rawPlayer),
       raw: rawPlayer
     };
   });
@@ -155,7 +163,6 @@ export function buildBattleSnapshot(frame) {
     players: normalizePlayers(parsed.data.scores, frame?.playerMeta),
     board: normalizeBattleBoard(battleMapState),
     battle: {
-      attackIndex: Number.isInteger(parsed.battleUpdate.attackIndex) ? parsed.battleUpdate.attackIndex : null,
       mapDiff: Array.isArray(parsed.battleUpdate.mapDiff) ? parsed.battleUpdate.mapDiff : [],
       citiesDiff: Array.isArray(parsed.battleUpdate.citiesDiff) ? parsed.battleUpdate.citiesDiff : [],
       desertsDiff: Array.isArray(parsed.battleUpdate.desertsDiff) ? parsed.battleUpdate.desertsDiff : [],
@@ -211,6 +218,12 @@ export function normalizePythonBridgeConfig(config) {
     enabled: source.enabled !== false,
     autoPush: source.autoPush !== false,
     simpleMode: source.simpleMode === true,
+    showDebug: source.showDebug === true,
+    showTurn: source.showTurn === true,
+    showPlayers: source.showPlayers === true,
+    showMapDiff: source.showMapDiff === true,
+    showCitiesDiff: source.showCitiesDiff === true,
+    showDesertsDiff: source.showDesertsDiff === true,
     url: normalizeUrl(source.url),
     timeoutMs: toPositiveInteger(source.timeoutMs, DEFAULT_PYTHON_BRIDGE_CONFIG.timeoutMs)
   };
@@ -294,5 +307,4 @@ export function findLatestBattleSnapshotFrame(frameBuffer) {
   }
   return null;
 }
-
 

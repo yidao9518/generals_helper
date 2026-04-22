@@ -61,8 +61,8 @@ Upload one structured battle snapshot.
         "index": 0,
         "alive": true,
         "dead": false,
-        "score": 120,
-        "raw": { "score": 120, "dead": false }
+        "total": 120,
+        "raw": { "total": 120, "dead": false }
       }
     ],
     "board": {
@@ -75,7 +75,6 @@ Upload one structured battle snapshot.
       "trailingValues": []
     },
     "battle": {
-      "attackIndex": 4,
       "mapDiff": [2, 1, 99, 11],
       "citiesDiff": [],
       "desertsDiff": [],
@@ -107,7 +106,7 @@ The browser extension may also send the full snapshot object at the top level of
 
 - `type` must be `battle_snapshot`
 - `snapshot`, `battle`, or a raw top-level snapshot object must be present
-- `players` is a normalized list, but the analyzer also accepts raw score objects under `raw`
+- `players` is a normalized list, but the analyzer also accepts raw player objects under `raw`
 - `board` may include `cells`, `armyTable`, `stateTable`, and `trailingValues`
 
 #### Response
@@ -131,7 +130,7 @@ The browser extension may also send the full snapshot object at the top level of
     "playerSummary": {
       "playerCount": 2,
       "aliveCount": 2,
-      "scoreStats": {
+      "valueStats": {
         "min": 98,
         "max": 120,
         "total": 218,

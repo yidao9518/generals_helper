@@ -1,4 +1,4 @@
-// noinspection JSUnresolvedReference,JSUnusedLocalSymbols,JSUnusedGlobalSymbols
+// noinspection JSUnresolvedReference,JSUnusedLocalSymbols,JSUnusedGlobalSymbols,JSValidateTypes
 
 import assert from "node:assert/strict";
 
@@ -58,14 +58,12 @@ class FakeElement {
       }
     };
     this.dataset = {};
-    this.className = "";
-    this.textContent = "";
     this.title = "";
     this.classList = new FakeClassList();
     this._listeners = new Map();
   }
 
-  appendChild(child) {
+  appendChild(child = null) {
     if (child && child.tagName === "FRAGMENT" && Array.isArray(child.children)) {
       this.children.push(...child.children);
       return child;
@@ -111,6 +109,7 @@ class FakeButtonElement extends FakeElement {}
 async function run() {
   const elements = new Map();
   let runtimeMessageListener = null;
+  let copiedText = null;
   const storageState = {
     pythonBridge: {
       enabled: true,
@@ -123,9 +122,9 @@ async function run() {
   const elementById = (id) => {
     if (!elements.has(id)) {
       let element = new FakeElement("div");
-      if (["boardSizeRange", "pythonBridgeEnabled", "simpleMode", "pythonBridgeUrl"].includes(id)) {
+      if (["boardSizeRange", "pythonBridgeEnabled", "pythonBridgeUrl"].includes(id)) {
         element = new FakeInputElement("input");
-      } else if (["refreshBtn", "openSettingsBtn", "testPythonBridge", "pushLatestSnapshot", "openDisplayPage"].includes(id)) {
+      } else if (["refreshBtn", "openSettingsBtn", "testPythonBridge", "pushLatestSnapshot", "openDisplayPage", "showDebug"].includes(id)) {
         element = new FakeButtonElement("button");
       }
       element.id = id;
@@ -154,9 +153,6 @@ async function run() {
     requestAnimationFrame(callback) {
       callback();
       return 1;
-    },
-    setInterval() {
-      return 1;
     }
   };
   globalThis.document = {
@@ -170,6 +166,14 @@ async function run() {
     addEventListener() {},
     visibilityState: "visible"
   };
+  if (!globalThis.navigator) {
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true });
+  }
+  globalThis.navigator.clipboard = {
+    async writeText(text) {
+      copiedText = text;
+    }
+  };
   globalThis.chrome = {
     runtime: {
       onMessage: {
@@ -177,7 +181,12 @@ async function run() {
           runtimeMessageListener = listener;
         }
       },
-      sendMessage: async () => {},
+      sendMessage: async (message) => {
+        if (typeof runtimeMessageListener === "function") {
+          runtimeMessageListener(message, {}, () => null);
+        }
+        return null;
+      },
       getURL(path) {
         return path;
       },
@@ -232,59 +241,149 @@ async function run() {
   assert.ok(sanityButton instanceof FakeElement);
   assert.ok(sanityFragment instanceof FakeElement);
   window.requestAnimationFrame(() => {});
-  window.setInterval(() => {});
   chrome.runtime.getURL("src/display/display.html");
   await chrome.runtime.openOptionsPage();
+
+  function buildBattleRelations({ inWar, warPlayerCount, adjacencyAssumed, currentStrength, previousStrength, currentTiles, previousTiles }) {
+    const commonPlayerState = (key, name, color, adjacentKey, adjacentName, adjacentColor) => ({
+      key,
+      name,
+      color,
+      inWar,
+      warReasons: inWar ? ["strength_not_increased"] : [],
+      currentStrength,
+      previousStrength,
+      currentTiles,
+      previousTiles,
+      associatedPlayers: adjacentKey === null ? [] : [{ key: adjacentKey, name: adjacentName, color: adjacentColor }],
+      adjacentPlayerKeys: adjacencyAssumed ? [adjacentKey] : [],
+      adjacentPlayerNames: adjacencyAssumed ? [adjacentName] : [],
+      adjacentPlayerColors: adjacencyAssumed ? [adjacentColor] : [],
+      relationText: adjacentName ? `关联：${adjacentName}` : "关联：暂无"
+    });
+
+    return {
+      comparisonAvailable: true,
+      warPlayerCount,
+      inWarPlayerKeys: inWar ? [0, 1] : [],
+      adjacencyAssumed,
+      playerStates: [
+        commonPlayerState(0, "WindHT", 0, 1, "yidao", 1),
+        commonPlayerState(1, "yidao", 1, 0, "WindHT", 0)
+      ],
+      notes: [],
+      debug: {
+        fieldRules: { strength: "total", tiles: "tiles", warWhen: "strength or tiles decreased" },
+        currentTurn: 8,
+        previousTurn: 7,
+        currentPlayerKeys: [0, 1],
+        previousPlayerKeys: [0, 1],
+        players: [
+          { key: 0, name: "WindHT", matchedPrevious: true, currentStrength, previousStrength, strengthDelta: currentStrength - previousStrength, currentTiles, previousTiles, tilesDelta: currentTiles - previousTiles, warReasons: inWar ? ["strength_not_increased"] : [], inWar },
+          { key: 1, name: "yidao", matchedPrevious: true, currentStrength, previousStrength, strengthDelta: currentStrength - previousStrength, currentTiles, previousTiles, tilesDelta: currentTiles - previousTiles, warReasons: inWar ? ["strength_not_increased"] : [], inWar }
+        ]
+      }
+    };
+  }
+
+  function buildLatestRecord({ id, turn, battleSummary, battleRelations, boardState }) {
+    return {
+      ok: true,
+      record: {
+        id,
+        snapshot: {
+          turn,
+          matchId: "match-1",
+          playerCount: 2,
+          aliveCount: 2,
+          players: [
+            { i: 0, color: 0, name: "WindHT", alive: true, dead: false, total: 3, tiles: 1, has_kill: false, raw: { total: 3, tiles: 1, has_kill: false } },
+            { i: 1, color: 1, name: "yidao", alive: false, dead: true, total: 3, tiles: 1, has_kill: true, raw: { total: 3, tiles: 1, has_kill: true } }
+          ],
+          board: boardState,
+          frame: { battleSummary }
+        },
+        analysis: {
+          summaryText: `game=match-1 | turn=${turn}`,
+          battleRelations
+        }
+      }
+    };
+  }
 
   let fetchCallCount = 0;
   globalThis.fetch = async (url) => {
     fetchCallCount += 1;
     if (String(url).endsWith("/v1/latest")) {
       if (fetchCallCount === 1) {
-        return new Response(JSON.stringify({
-          ok: true,
-          record: {
-            id: 1,
-            snapshot: {
-              turn: 8,
-              matchId: "match-1",
-              playerCount: 2,
-              aliveCount: 2,
-              players: [
-                  { i: 0, color: 0, name: "WindHT", alive: true, dead: false, score: 12, total: 3, tiles: 1, has_kill: false, raw: { total: 3, tiles: 1, has_kill: false } },
-                  { i: 1, color: 1, name: "yidao", alive: false, dead: true, score: 11, total: 3, tiles: 1, has_kill: true, raw: { total: 3, tiles: 1, has_kill: true } }
-              ],
-              board: {
-                width: 2,
-                height: 2,
-                armyTable: [[3, 0], [5, 6]],
-                stateTable: [[0, 1], [-2, 0]],
-                cells: [],
-                trailingValues: []
-              },
-              frame: { battleSummary: "Turn8 | Players2/2" }
-            },
-            analysis: { summaryText: "game=match-1 | turn=8" }
-          }
-        }), {
+        return new Response(JSON.stringify(buildLatestRecord({
+          id: 1,
+          turn: 8,
+          battleSummary: "Turn8 | Players2/2",
+          boardState: {
+            width: 2,
+            height: 2,
+            armyTable: [[3, 0], [5, 6]],
+            stateTable: [[0, 1], [-2, 0]],
+            cells: [],
+            trailingValues: []
+          },
+          battleRelations: buildBattleRelations({
+            inWar: true,
+            warPlayerCount: 2,
+            adjacencyAssumed: true,
+            currentStrength: 3,
+            previousStrength: 3,
+            currentTiles: 1,
+            previousTiles: 1
+          })
+        })), {
           status: 200,
           headers: { "Content-Type": "application/json" }
         });
       }
 
       if (fetchCallCount === 2) {
+        return new Response(JSON.stringify(buildLatestRecord({
+          id: 2,
+          turn: 9,
+          battleSummary: "Turn9 | Players2/2",
+          boardState: {
+            width: 2,
+            height: 2,
+            armyTable: [[3, 0], [5, 6]],
+            stateTable: [[0, 1], [-2, 0]],
+            cells: [],
+            trailingValues: []
+          },
+          battleRelations: buildBattleRelations({
+            inWar: true,
+            warPlayerCount: 2,
+            adjacencyAssumed: true,
+            currentStrength: 3,
+            previousStrength: 3,
+            currentTiles: 1,
+            previousTiles: 1
+          })
+        })), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (fetchCallCount === 3) {
         return new Response(JSON.stringify({
           ok: true,
           record: {
-            id: 2,
+            id: 3,
             snapshot: {
-              turn: 9,
+              turn: 10,
               matchId: "match-1",
               playerCount: 2,
               aliveCount: 2,
               players: [
-                { i: 0, color: 0, name: "WindHT", alive: true, dead: false, score: 12, total: 3, tiles: 1, has_kill: false, raw: { total: 3, tiles: 1, has_kill: false } },
-                { i: 1, color: 1, name: "yidao", alive: false, dead: true, score: 11, total: 3, tiles: 1, has_kill: true, raw: { total: 3, tiles: 1, has_kill: true } }
+                { i: 0, color: 0, name: "WindHT", alive: true, dead: false, total: 3, tiles: 1, has_kill: false, raw: { total: 3, tiles: 1, has_kill: false } },
+                { i: 1, color: 1, name: "yidao", alive: false, dead: true, total: 3, tiles: 1, has_kill: true, raw: { total: 3, tiles: 1, has_kill: true } }
               ],
               board: {
                 width: 2,
@@ -294,9 +393,22 @@ async function run() {
                 cells: [],
                 trailingValues: []
               },
-              frame: { battleSummary: "Turn9 | Players2/2" }
+              frame: { battleSummary: "Turn10 | Players2/2" }
             },
-            analysis: { summaryText: "game=match-1 | turn=9" }
+            analysis: {
+              summaryText: "game=match-1 | turn=10",
+              battleRelations: {
+                comparisonAvailable: true,
+                warPlayerCount: 0,
+                inWarPlayerKeys: [],
+                adjacencyAssumed: false,
+                playerStates: [
+                  { key: 0, name: "WindHT", color: 0, inWar: false, warReasons: [], currentStrength: 3, previousStrength: 3, currentTiles: 1, previousTiles: 1, associatedPlayers: [{ key: 1, name: "yidao", color: 1 }], adjacentPlayerKeys: [], adjacentPlayerNames: [], adjacentPlayerColors: [], relationText: "关联：yidao" },
+                  { key: 1, name: "yidao", color: 1, inWar: false, warReasons: [], currentStrength: 3, previousStrength: 3, currentTiles: 1, previousTiles: 1, associatedPlayers: [{ key: 0, name: "WindHT", color: 0 }], adjacentPlayerKeys: [], adjacentPlayerNames: [], adjacentPlayerColors: [], relationText: "关联：WindHT" }
+                ],
+                notes: []
+              }
+            }
           }
         }), {
           status: 200,
@@ -304,15 +416,43 @@ async function run() {
         });
       }
 
-      if (fetchCallCount === 3) {
+      if (fetchCallCount === 4) {
         return new Response(JSON.stringify({ ok: false, error: "temporary outage" }), {
           status: 503,
           headers: { "Content-Type": "application/json" }
         });
       }
 
-      if (fetchCallCount === 4) {
+      if (fetchCallCount === 5) {
         return new Response(JSON.stringify({ ok: true, record: null }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (fetchCallCount === 6) {
+        return new Response(JSON.stringify(buildLatestRecord({
+          id: 6,
+          turn: 11,
+          battleSummary: "Turn11 | Players2/2",
+          boardState: {
+            width: 2,
+            height: 2,
+            armyTable: [[3, 0], [5, 6]],
+            stateTable: [[0, 1], [-2, 0]],
+            cells: [],
+            trailingValues: []
+          },
+          battleRelations: buildBattleRelations({
+            inWar: true,
+            warPlayerCount: 2,
+            adjacencyAssumed: true,
+            currentStrength: 3,
+            previousStrength: 3,
+            currentTiles: 1,
+            previousTiles: 1
+          })
+        })), {
           status: 200,
           headers: { "Content-Type": "application/json" }
         });
@@ -326,11 +466,11 @@ async function run() {
   };
 
   await import("../src/display/display-main.js");
-  const simpleModeToggle = elementById("simpleMode");
-  assert.equal(simpleModeToggle.checked, true);
   for (let attempt = 0; attempt < 20 && boardGrid.children.length === 0; attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
+
+  assert.equal(elements.has("simpleMode"), false);
 
   assert.equal(boardGrid.children.length, 4);
   assert.equal(boardGrid.children[0].style.background, "rgb(255, 0, 0)");
@@ -346,31 +486,26 @@ async function run() {
   assert.equal(playerList.children[0].children.length, 2);
   assert.equal(playerList.children[0].children[0].children.length, 1);
   assert.equal(playerList.children[0].children[0].children[0].children.length, 2);
-  assert.equal(playerList.children[0].children[1].children.length, 2);
-  assert.equal(playerList.children[0].children[1].children[0].textContent, "兵力：3");
-  assert.equal(playerList.children[0].children[1].children[1].textContent, "地块：1");
+  assert.equal(playerList.children[0].children[1].children.length, 3);
+  assert.equal(playerList.children[0].children[1].children[0].children[0].textContent, "兵力：");
+  assert.equal(playerList.children[0].children[1].children[0].children[1].textContent, "3");
+  assert.equal(playerList.children[0].children[1].children[1].children[0].textContent, "地块：");
+  assert.equal(playerList.children[0].children[1].children[1].children[1].textContent, "1");
+  assert.equal(playerList.children[0].children[1].children[2].children[0].textContent, "关系：");
+  assert.equal(playerList.children[0].children[1].children[2].children[1].children.length, 1);
+  assert.equal(playerList.children[0].children[1].children[2].children[1].children[0].style.background, "rgb(39, 146, 255)");
+  assert.equal(playerList.children[0].classList.contains("player-card--war"), true);
   assert.equal(playerList.children[0].style["--player-accent"], "rgb(255, 0, 0)");
   assert.equal(playerList.children[1].classList.contains("player-card--dead"), true);
   assert.equal(String(playerList.children[0].textContent).includes("raw"), false);
   assert.equal(String(playerList.children[0].textContent).includes("i="), false);
   assert.equal(String(playerList.children[0].textContent).includes("color"), false);
-
-  simpleModeToggle.checked = false;
-  simpleModeToggle.dispatchEvent({ type: "change" });
-  for (let attempt = 0; attempt < 20 && storageState.pythonBridge.simpleMode !== false; attempt += 1) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  for (let attempt = 0; attempt < 20 && playerList.children[0]?.children?.length !== 3; attempt += 1) {
+  refreshBtn.dispatchEvent({ type: "click" });
+  for (let attempt = 0; attempt < 20 && !String(status.textContent).includes("已从 Python 刷新"); attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
 
-  assert.equal(storageState.pythonBridge.simpleMode, false);
-  assert.equal(playerList.children[0].children.length, 3);
-  assert.equal(playerList.children[0].children[1].children.length, 8);
-  assert.equal(playerList.children[0].children[1].children[3].textContent, "总分：3");
-  assert.equal(playerList.children[0].children[1].children[4].textContent, "地块：1");
-  assert.equal(playerList.children[0].children[1].children[5].textContent, "击杀：否");
-  assert.equal(playerList.children[0].children[2].textContent.startsWith("raw:"), true);
+  assert.equal(String(status.textContent).includes("已从 Python 刷新"), true);
 
   refreshBtn.dispatchEvent({ type: "click" });
   for (let attempt = 0; attempt < 20 && !String(status.textContent).includes("尺寸不一致"); attempt += 1) {
@@ -398,6 +533,12 @@ async function run() {
   assert.equal(boardGrid.children.length, 4);
   assert.equal(boardGrid.children[3].style.background, "rgb(255, 0, 0)");
 
+  runtimeMessageListener?.({ type: "BATTLE_SNAPSHOT_UPDATED" }, {}, () => null);
+  for (let attempt = 0; attempt < 20 && fetchCallCount < 6; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(fetchCallCount >= 6, true);
+
   console.log("display tests passed");
 }
 
@@ -405,6 +546,4 @@ run().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
-
-
 

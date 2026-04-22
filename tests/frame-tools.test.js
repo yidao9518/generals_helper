@@ -87,7 +87,6 @@ function run() {
     {
       turn: 10,
       scores: Array.from({ length: 16 }, () => ({ dead: false })),
-      attackIndex: 3,
       map_diff: [2, 1, 99, 11],
       cities_diff: [0],
       deserts_diff: [0]
@@ -234,7 +233,6 @@ function run() {
     {
       turn: 1,
       scores: Array.from({ length: 16 }, () => ({ dead: false })),
-      attackIndex: 4,
       map_diff: [0, 14, ...turn1Values],
       cities_diff: [],
       deserts_diff: []
@@ -256,7 +254,7 @@ function run() {
   const decoratedUpdate = decorateBattleFrame({
     eventName: "game_update",
     tabId: 8,
-    preview: '42["game_update",{"turn":2,"scores":[{"dead":false}],"attackIndex":5,"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]'
+    preview: '42["game_update",{"turn":2,"scores":[{"dead":false}],"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]'
   }, battleState, BATTLE_DISPLAY_CONFIG);
   assert.equal(decoratedUpdate.battleMapDiffLength, 4);
   assert.match(decoratedUpdate.battleSummary, /Turn2/);
@@ -266,7 +264,7 @@ function run() {
     {
       eventName: "game_update",
       tabId: 9,
-      preview: '42["game_update",{"turn":2,"scores":[{"dead":false}],"attackIndex":5,"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]'
+      preview: '42["game_update",{"turn":2,"scores":[{"dead":false}],"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]'
     },
     {
       eventName: "game_start",
@@ -287,7 +285,7 @@ function run() {
     {
       eventName: "game_update",
       tabId: 10,
-      preview: '42["game_update",{"turn":2,"scores":[{"dead":false}],"attackIndex":5,"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]'
+      preview: '42["game_update",{"turn":2,"scores":[{"dead":false}],"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]'
     }
   ];
   const rehydrateMutated = rehydrateBattleFramesFromBuffer(rehydrateFrames, new Map(), BATTLE_DISPLAY_CONFIG);
@@ -299,7 +297,6 @@ function run() {
     {
       turn: 2,
       scores: Array.from({ length: 16 }, () => ({ dead: false })),
-      attackIndex: 5,
       map_diff: [2, 1, 99, 11],
       cities_diff: [],
       deserts_diff: []

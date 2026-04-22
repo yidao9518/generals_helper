@@ -1,6 +1,15 @@
+import helperConfig from "../shared/helper-config.js";
 import { setTextContent } from "../shared/dom-utils.js";
+import { sendToActiveTab } from "../shared/tab-utils.js";
 import { loadPythonBridgeConfig, pingPythonBridge, savePythonBridgeConfig } from "../shared/python-bridge.js";
 
+const showDebugEl = document.getElementById("showDebug");
+const simpleModeEl = document.getElementById("simpleMode");
+const showTurnEl = document.getElementById("showTurn");
+const showPlayersEl = document.getElementById("showPlayers");
+const showMapDiffEl = document.getElementById("showMapDiff");
+const showCitiesDiffEl = document.getElementById("showCitiesDiff");
+const showDesertsDiffEl = document.getElementById("showDesertsDiff");
 const enabledEl = document.getElementById("pythonBridgeEnabled");
 const urlEl = document.getElementById("pythonBridgeUrl");
 const testBtn = document.getElementById("testPythonBridge");
@@ -15,6 +24,7 @@ const bridgeStatusEl = document.getElementById("bridgeStatus");
 
 let currentConfig = null;
 let bridgeStatusPollTimer = null;
+let currentBattleConfig = { ...helperConfig.BATTLE_DISPLAY_CONFIG };
 
 function formatTimestamp(value) {
   if (typeof value !== "string" || !value) {
@@ -53,6 +63,13 @@ function renderBridgeStatus(message, isError = false) {
   bridgeStatusEl.style.color = isError ? "#b91c1c" : "#666";
 }
 
+function syncBattleControls(config) {
+  currentBattleConfig = { ...helperConfig.BATTLE_DISPLAY_CONFIG, ...(config || {}) };
+  if (showDebugEl instanceof HTMLInputElement) {
+    showDebugEl.checked = Boolean(currentBattleConfig.showDebug);
+  }
+}
+
 function renderBridgeDetails(status, config) {
   const mergedStatus = status || {};
 
@@ -82,6 +99,27 @@ function syncBridgeControls(config) {
   if (urlEl instanceof HTMLInputElement) {
     urlEl.value = config.url;
   }
+  if (simpleModeEl instanceof HTMLInputElement) {
+    simpleModeEl.checked = Boolean(config.simpleMode);
+  }
+  if (showDebugEl instanceof HTMLInputElement) {
+    showDebugEl.checked = Boolean(config.showDebug);
+  }
+  if (showTurnEl instanceof HTMLInputElement) {
+    showTurnEl.checked = Boolean(config.showTurn);
+  }
+  if (showPlayersEl instanceof HTMLInputElement) {
+    showPlayersEl.checked = Boolean(config.showPlayers);
+  }
+  if (showMapDiffEl instanceof HTMLInputElement) {
+    showMapDiffEl.checked = Boolean(config.showMapDiff);
+  }
+  if (showCitiesDiffEl instanceof HTMLInputElement) {
+    showCitiesDiffEl.checked = Boolean(config.showCitiesDiff);
+  }
+  if (showDesertsDiffEl instanceof HTMLInputElement) {
+    showDesertsDiffEl.checked = Boolean(config.showDesertsDiff);
+  }
 }
 
 async function persistBridgeConfig(partial) {
@@ -99,6 +137,20 @@ async function refreshBridgeConfig() {
   syncBridgeControls(currentConfig);
   await refreshBridgeStatus();
   void probeBridgeConnection();
+}
+
+async function refreshBattleConfig() {
+  try {
+    const state = await sendToActiveTab({ type: "GET_HELPER_STATE" });
+    if (state?.ok) {
+      syncBattleControls(state.battleConfig);
+      return state;
+    }
+  } catch {
+    // Keep the defaults already shown in the settings page when no generals.io tab is available.
+  }
+  syncBattleControls(currentBattleConfig);
+  return null;
 }
 
 function startBridgeStatusPolling() {
@@ -222,6 +274,82 @@ if (urlEl instanceof HTMLInputElement) {
   urlEl.addEventListener("blur", saveUrl);
 }
 
+if (simpleModeEl instanceof HTMLInputElement) {
+  simpleModeEl.addEventListener("change", async () => {
+    try {
+      const nextConfig = await persistBridgeConfig({ simpleMode: simpleModeEl.checked });
+      if (currentBattleConfig) {
+        syncBridgeControls(nextConfig);
+      }
+      renderBridgeStatus(`玩家简约模式已${simpleModeEl.checked ? "开启" : "关闭"}`);
+      await refreshBridgeStatus();
+    } catch (error) {
+      renderBridgeStatus(`保存失败：${String(error?.message || error)}`, true);
+      await refreshBridgeConfig();
+    }
+  });
+}
+
+// handlers for battlefield display toggles
+const makeDisplayToggleHandler = (el, key) => {
+  if (!(el instanceof HTMLInputElement)) return;
+  el.addEventListener("change", async () => {
+    try {
+      const payload = {};
+      payload[key] = el.checked;
+      const nextConfig = await persistBridgeConfig(payload);
+      // update live display config on active tab
+      currentBattleConfig = { ...currentBattleConfig, [key]: el.checked };
+      try {
+        const state = await sendToActiveTab({ type: "SET_BATTLE_CONFIG", config: { [key]: el.checked } });
+        if (state?.ok) {
+          syncBattleControls(state.battleConfig);
+        }
+      } catch {
+        // ignore when no active tab
+      }
+      if (currentBattleConfig) {
+        syncBridgeControls(nextConfig);
+      }
+      renderBridgeStatus(`${el.checked ? "已开启" : "已关闭"}${key}`);
+      await refreshBridgeStatus();
+    } catch (error) {
+      renderBridgeStatus(`保存失败：${String(error?.message || error)}`, true);
+      await refreshBridgeConfig();
+      await refreshBattleConfig();
+    }
+  });
+};
+
+makeDisplayToggleHandler(showTurnEl, "showTurn");
+makeDisplayToggleHandler(showPlayersEl, "showPlayers");
+makeDisplayToggleHandler(showMapDiffEl, "showMapDiff");
+makeDisplayToggleHandler(showCitiesDiffEl, "showCitiesDiff");
+makeDisplayToggleHandler(showDesertsDiffEl, "showDesertsDiff");
+
+if (showDebugEl instanceof HTMLInputElement) {
+  showDebugEl.addEventListener("change", async () => {
+    try {
+      const nextConfig = await persistBridgeConfig({ showDebug: showDebugEl.checked });
+      // Update BATTLE_DISPLAY_CONFIG for active tab as well, so it keeps working
+      currentBattleConfig = { ...currentBattleConfig, showDebug: showDebugEl.checked };
+      const state = await sendToActiveTab({ type: "SET_BATTLE_CONFIG", config: { showDebug: showDebugEl.checked } });
+      if (state?.ok) {
+        syncBattleControls(state.battleConfig);
+      }
+      if (currentBattleConfig) {
+        syncBridgeControls(nextConfig);
+      }
+      renderBridgeStatus(`调试信息已${showDebugEl.checked ? "开启" : "关闭"}`);
+      await refreshBridgeStatus();
+    } catch (error) {
+      renderBridgeStatus(`保存失败：${String(error?.message || error)}`, true);
+      await refreshBridgeConfig();
+      await refreshBattleConfig();
+    }
+  });
+}
+
 if (testBtn instanceof HTMLButtonElement) {
   testBtn.addEventListener("click", () => {
     void testBridge();
@@ -245,15 +373,6 @@ if (openDisplayPageBtn instanceof HTMLButtonElement) {
 }
 
 void refreshBridgeConfig();
+void refreshBattleConfig();
 startBridgeStatusPolling();
-
-
-
-
-
-
-
-
-
-
 

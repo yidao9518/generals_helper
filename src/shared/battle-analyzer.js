@@ -151,7 +151,6 @@ export function parseBattleUpdate(payload) {
     turn: data.turn,
     playerCount: scores.length,
     aliveCount: scores.filter((s) => !s.dead).length,
-    attackIndex: data.attackIndex,
     mapDiff,
     mapDiffPatch: parseSkipCountMapDiff(mapDiff),
     mapDiffInitial: parseTurn1InitialMapDiff(mapDiff, data.turn),

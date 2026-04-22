@@ -1,4 +1,5 @@
 import helperConfig from "../shared/helper-config.js";
+import { sendToActiveTab } from "../shared/tab-utils.js";
 
 const modeRawBtn = document.getElementById("modeRaw");
 const modeBattleBtn = document.getElementById("modeBattle");
@@ -22,25 +23,6 @@ const battleSwitches = [
   [showDesertsDiffBtn, "showDesertsDiff"],
   [showDebugBtn, "showDebug"]
 ];
-
-async function getActiveTabId() {
-  const currentWindowTabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  const currentWindowTab = currentWindowTabs[0];
-  if (currentWindowTab?.url?.includes("generals.io")) {
-    return currentWindowTab.id;
-  }
-
-  const generalsTabs = await chrome.tabs.query({ url: ["*://*.generals.io/*"] });
-  return generalsTabs.find((tab) => tab.active)?.id ?? generalsTabs[0]?.id ?? currentWindowTab?.id;
-}
-
-async function sendToActiveTab(message) {
-  const tabId = await getActiveTabId();
-  if (!Number.isInteger(tabId)) {
-    throw new Error("当前页面不可用");
-  }
-  return chrome.tabs.sendMessage(tabId, message);
-}
 
 async function openSettingsPage() {
   if (typeof chrome.runtime.openOptionsPage === "function") {

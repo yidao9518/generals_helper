@@ -43,7 +43,7 @@ async function run() {
       ],
       trailingValues: []
     },
-    preview: '42["game_update",{"turn":2,"scores":[{"score":11,"dead":false},{"score":7,"dead":true}],"attackIndex":5,"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]'
+    preview: '42["game_update",{"turn":2,"scores":[{"total":11,"dead":false},{"total":7,"dead":true}],"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]'
   });
 
   assert.ok(snapshot);
@@ -51,7 +51,7 @@ async function run() {
   assert.equal(snapshot.gameId, "match-abc");
   assert.equal(snapshot.turn, 2);
   assert.equal(snapshot.playerCount, 2);
-  assert.equal(snapshot.players[0].score, 11);
+  assert.equal(snapshot.players[0].total, 11);
   assert.equal(snapshot.players[0].alive, true);
   assert.equal(snapshot.players[1].alive, false);
   assert.equal(snapshot.board.width, 3);
@@ -88,7 +88,7 @@ async function run() {
       stateTable: [[2]],
       trailingValues: []
     },
-    preview: '42["game_update",{"turn":3,"scores":[{"total":2,"tiles":1,"i":0,"color":0,"dead":false},{"total":2,"tiles":1,"i":1,"color":1,"dead":false}],"attackIndex":0,"map_diff":[1800],"cities_diff":[0],"deserts_diff":[0]}]'
+    preview: '42["game_update",{"turn":3,"scores":[{"total":2,"tiles":1,"i":0,"color":0,"dead":false},{"total":2,"tiles":1,"i":1,"color":1,"dead":false}],"map_diff":[1800],"cities_diff":[0],"deserts_diff":[0]}]'
   });
 
   assert.equal(snapshotWithMeta.players[0].name, "WindHT");
@@ -124,13 +124,13 @@ async function run() {
       stateTable: [[2]],
       trailingValues: []
     },
-    preview: '42["game_update",{"turn":4,"scores":[{"total":2,"tiles":1,"i":9,"color":9,"name":"wrong","score":123,"dead":false}],"attackIndex":0,"map_diff":[1800],"cities_diff":[0],"deserts_diff":[0]}]'
+    preview: '42["game_update",{"turn":4,"scores":[{"total":2,"tiles":1,"i":9,"color":9,"name":"wrong","dead":false}],"map_diff":[1800],"cities_diff":[0],"deserts_diff":[0]}]'
   });
 
   assert.equal(snapshotWithConflicts.players[0].i, 0);
   assert.equal(snapshotWithConflicts.players[0].color, 0);
   assert.equal(snapshotWithConflicts.players[0].name, "WindHT");
-  assert.equal(snapshotWithConflicts.players[0].score, 123);
+  assert.equal(snapshotWithConflicts.players[0].total, 2);
   assert.equal(snapshotWithConflicts.players[0].dead, false);
 
   const snapshotWithOutOfOrderScores = buildBattleSnapshot({
@@ -161,7 +161,7 @@ async function run() {
       stateTable: [[2]],
       trailingValues: []
     },
-    preview: '42["game_update",{"turn":5,"scores":[{"i":2,"color":2,"score":30,"dead":false},{"i":0,"color":0,"score":18,"dead":false},{"i":1,"color":1,"score":22,"dead":false}],"attackIndex":0,"map_diff":[1800],"cities_diff":[0],"deserts_diff":[0]}]'
+    preview: '42["game_update",{"turn":5,"scores":[{"i":2,"color":2,"total":30,"dead":false},{"i":0,"color":0,"total":18,"dead":false},{"i":1,"color":1,"total":22,"dead":false}],"map_diff":[1800],"cities_diff":[0],"deserts_diff":[0]}]'
   });
 
   assert.equal(snapshotWithOutOfOrderScores.players[0].i, 2);

@@ -1,17 +1,20 @@
 import helperConfig from "../shared/helper-config.js";
 import { setTextContent } from "../shared/dom-utils.js";
-import { DEFAULT_PYTHON_BRIDGE_CONFIG, fetchPythonBridgeLatestRecord, loadPythonBridgeConfig, savePythonBridgeConfig } from "../shared/python-bridge.js";
+import { DEFAULT_PYTHON_BRIDGE_CONFIG, fetchPythonBridgeLatestRecord, loadPythonBridgeConfig } from "../shared/python-bridge.js";
 import { renderCombinedBoard } from "./display-board.js";
 import { renderPlayerPanel } from "./display-players.js";
 
 const refreshBtn = document.getElementById("refreshBtn");
 const openSettingsBtn = document.getElementById("openSettingsBtn");
-const simpleModeEl = document.getElementById("simpleMode");
 const turnValueEl = document.getElementById("turnValue");
 const matchValueEl = document.getElementById("matchValue");
 const playersValueEl = document.getElementById("playersValue");
-const summaryValueEl = document.getElementById("summaryValue");
+const debugPanelEl = document.getElementById("debugPanel");
+const debugValueEl = document.getElementById("debugValue");
+const debugCopyBtn = document.getElementById("debugCopyBtn");
 const boardMetaEl = document.getElementById("boardMeta");
+const citiesDiffValueEl = document.getElementById("citiesDiffValue");
+const desertsDiffValueEl = document.getElementById("desertsDiffValue");
 const boardSizeRangeEl = document.getElementById("boardSizeRange");
 const boardSizeValueEl = document.getElementById("boardSizeValue");
 const playerMetaEl = document.getElementById("playerMeta");
@@ -29,7 +32,6 @@ const PLAYER_COLORS = Array.isArray(helperConfig?.PLAYER_COLORS) ? helperConfig.
 const BOARD_SCALE_DEFAULT = 1;
 const BOARD_SCALE_MIN = 0.5;
 const BOARD_SCALE_MAX = 1.5;
-const DISPLAY_REFRESH_INTERVAL_MS = 1000;
 
 let boardScale = BOARD_SCALE_DEFAULT;
 let pinchState = null;
@@ -37,31 +39,18 @@ let boardScaleFrameId = null;
 let boardScalePending = null;
 
 let latestSnapshotRequestId = 0;
-let pollingTimer = null;
 let latestSnapshot = null;
 let latestSnapshotRecordId = null;
 let latestSnapshotSimpleMode = DEFAULT_PYTHON_BRIDGE_CONFIG.simpleMode;
-let latestDisplayConfig = { ...DEFAULT_PYTHON_BRIDGE_CONFIG };
+// start with helper-config defaults merged with bridge config defaults
+let latestDisplayConfig = { ...helperConfig.BATTLE_DISPLAY_CONFIG, ...DEFAULT_PYTHON_BRIDGE_CONFIG };
 let cachedBridgeConfig = null;
-
-function syncDisplayControls(config) {
-  if (simpleModeEl instanceof HTMLInputElement) {
-    simpleModeEl.checked = Boolean(config?.simpleMode);
-  }
-}
-
-async function persistDisplayConfig(partial) {
-  cachedBridgeConfig = await savePythonBridgeConfig({ ...(cachedBridgeConfig || {}), ...partial });
-  syncDisplayControls(cachedBridgeConfig);
-  void chrome.runtime.sendMessage({
-    type: "PYTHON_BRIDGE_CONFIG_UPDATED",
-    config: cachedBridgeConfig
-  }).catch(() => null);
-  return cachedBridgeConfig;
-}
 
 if (chrome.runtime?.onMessage?.addListener) {
   chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === "BATTLE_SNAPSHOT_UPDATED") {
+      void refreshSnapshot();
+    }
     if (message?.type === "PYTHON_BRIDGE_PUSH_SUCCEEDED") {
       void refreshSnapshot();
     }
@@ -106,8 +95,6 @@ async function getBridgeConfigForDisplay({ refresh = false } = {}) {
   } catch {
     cachedBridgeConfig = { ...DEFAULT_PYTHON_BRIDGE_CONFIG };
   }
-
-  syncDisplayControls(cachedBridgeConfig);
   return cachedBridgeConfig;
 }
 
@@ -231,6 +218,72 @@ function getPlayerColor(color) {
   return Number.isInteger(color) && color >= 0 && color < PLAYER_COLORS.length ? PLAYER_COLORS[color] : "#94a3b8";
 }
 
+function formatDebugSummary(battleRelations) {
+  const debug = battleRelations?.debug && typeof battleRelations.debug === "object" ? battleRelations.debug : null;
+  const playerStates = Array.isArray(battleRelations?.playerStates) ? battleRelations.playerStates : [];
+  if (!debug && !playerStates.length) {
+    return "暂无调试信息";
+  }
+
+  const lines = [];
+  lines.push(
+    `comparison=${battleRelations?.comparisonAvailable ? "是" : "否"} | ` +
+    `warCount=${typeof battleRelations?.warPlayerCount === "number" ? battleRelations.warPlayerCount : "?"} | ` +
+    `adjacent=${battleRelations?.adjacencyAssumed ? "是" : "否"}`
+  );
+
+  if (debug) {
+    lines.push(
+      `turn=${debug.currentTurn ?? "?"} | prev=${debug.previousTurn ?? "?"} | keys=${(debug.currentPlayerKeys || []).join(",") || "无"}`
+    );
+  }
+
+  const players = debug && Array.isArray(debug.players) && debug.players.length ? debug.players : playerStates;
+  for (const player of players.slice(0, 6)) {
+    // noinspection JSUnresolvedReference
+    lines.push(
+      `${player.name || `玩家${player.key}`}: ` +
+      `s=${player.currentStrength ?? "?"}/${player.previousStrength ?? "?"} ` +
+      `t=${player.currentTiles ?? "?"}/${player.previousTiles ?? "?"} ` +
+      `sd=${player.strengthDrop ? "是" : "否"} ` +
+      `td=${player.tilesDrop ? "是" : "否"} ` +
+      `war=${player.inWar ? "是" : "否"} | ` +
+      `reasons=${Array.isArray(player.warReasons) && player.warReasons.length ? player.warReasons.join(",") : "无"}`
+    );
+  }
+
+  const raw = debug || { playerStates };
+  lines.push("raw=");
+  lines.push(JSON.stringify(raw, null, 2));
+  return lines.join("\n");
+}
+
+async function copyDebugText() {
+  const text = String(debugValueEl?.textContent || "");
+  if (!text || text === "暂无") {
+    throw new Error("暂无可复制内容");
+  }
+
+  if (globalThis.navigator?.clipboard?.writeText) {
+    await globalThis.navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  // noinspection JSDeprecatedSymbols
+  const copied = typeof document.execCommand === "function" && document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("复制失败");
+  }
+}
+
 function renderSnapshot(snapshot, recordId = null, displayConfig = latestDisplayConfig) {
   latestSnapshot = snapshot || null;
   latestSnapshotRecordId = Number.isInteger(recordId) ? recordId : null;
@@ -242,7 +295,10 @@ function renderSnapshot(snapshot, recordId = null, displayConfig = latestDisplay
     setTextContent(turnValueEl, "暂无", { mutedClass: DISPLAY_CLASS.muted });
     setTextContent(matchValueEl, "暂无", { mutedClass: DISPLAY_CLASS.muted });
     setTextContent(playersValueEl, "暂无", { mutedClass: DISPLAY_CLASS.muted });
-    setTextContent(summaryValueEl, "暂无", { mutedClass: DISPLAY_CLASS.muted });
+    setTextContent(debugValueEl, "暂无", { mutedClass: DISPLAY_CLASS.muted });
+    if (debugPanelEl instanceof HTMLElement) {
+      debugPanelEl.style.display = displayConfig?.showDebug ? "block" : "none";
+    }
     renderCombinedBoard({ snapshot: null, boardGridEl, boardMetaEl, boardScale, getPlayerColor });
     renderPlayerPanel({ snapshot: null, displayConfig, playerListEl, playerMetaEl, getPlayerColor });
     return;
@@ -255,20 +311,50 @@ function renderSnapshot(snapshot, recordId = null, displayConfig = latestDisplay
     ? latestSnapshot.aliveCount
     : players.filter((player) => player?.alive !== false && player?.dead !== true).length;
   const playerCount = typeof latestSnapshot?.playerCount === "number" ? latestSnapshot.playerCount : players.length;
-  const summaryText = latestSnapshot?.frame?.battleSummary || latestSnapshot?.summary || latestSnapshot?.battle?.summary || "暂无";
+  const debugText = formatDebugSummary(latestSnapshot?.analysis?.battleRelations);
 
+  // The top-line cards (回合 / 对局 / 玩家-存活) must always be visible per UX requirement.
+  const turnCard = turnValueEl?.parentElement;
+  if (turnCard instanceof HTMLElement) {
+    // Always show the turn card regardless of displayConfig
+    turnCard.style.display = "";
+  }
   setTextContent(turnValueEl, turn, { mutedClass: DISPLAY_CLASS.muted });
-  setTextContent(matchValueEl, matchId, { mutedClass: DISPLAY_CLASS.muted });
+
+  const playersCard = playersValueEl?.parentElement;
+  if (playersCard instanceof HTMLElement) {
+    // Always show the players / alive card regardless of displayConfig
+    playersCard.style.display = "";
+  }
   setTextContent(playersValueEl, `${playerCount} / ${aliveCount}`, { mutedClass: DISPLAY_CLASS.muted });
-  setTextContent(summaryValueEl, summaryText, { mutedClass: DISPLAY_CLASS.muted });
+
+  setTextContent(matchValueEl, matchId, { mutedClass: DISPLAY_CLASS.muted });
+
+  // map/cities/deserts diffs
+  if (citiesDiffValueEl instanceof HTMLElement) {
+    const parent = citiesDiffValueEl.parentElement;
+    if (parent instanceof HTMLElement) parent.style.display = displayConfig?.showCitiesDiff ? "" : "none";
+    const citiesCount = Array.isArray(latestSnapshot?.battle?.citiesDiff) ? latestSnapshot.battle.citiesDiff.length : 0;
+    setTextContent(citiesDiffValueEl, citiesCount ? `${citiesCount} 个变化` : "暂无", { mutedClass: DISPLAY_CLASS.muted });
+  }
+  if (desertsDiffValueEl instanceof HTMLElement) {
+    const parent = desertsDiffValueEl.parentElement;
+    if (parent instanceof HTMLElement) parent.style.display = displayConfig?.showDesertsDiff ? "" : "none";
+    const desertsCount = Array.isArray(latestSnapshot?.battle?.desertsDiff) ? latestSnapshot.battle.desertsDiff.length : 0;
+    setTextContent(desertsDiffValueEl, desertsCount ? `${desertsCount} 个变化` : "暂无", { mutedClass: DISPLAY_CLASS.muted });
+  }
+
+  setTextContent(debugValueEl, debugText, { mutedClass: DISPLAY_CLASS.muted });
+  if (debugPanelEl instanceof HTMLElement) {
+    debugPanelEl.style.display = displayConfig?.showDebug ? "block" : "none";
+  }
   renderCombinedBoard({ snapshot: latestSnapshot, boardGridEl, boardMetaEl, boardScale, getPlayerColor });
   renderPlayerPanel({ snapshot: latestSnapshot, displayConfig, playerListEl, playerMetaEl, getPlayerColor });
 }
 
 function renderCurrentSnapshot() {
   if (latestSnapshot) {
-    renderCombinedBoard({ snapshot: latestSnapshot, boardGridEl, boardMetaEl, boardScale, getPlayerColor });
-    renderPlayerPanel({ snapshot: latestSnapshot, displayConfig: latestDisplayConfig, playerListEl, playerMetaEl, getPlayerColor });
+    renderSnapshot(latestSnapshot, latestSnapshotRecordId, latestDisplayConfig);
   }
 }
 
@@ -317,15 +403,6 @@ async function refreshSnapshot({ refreshConfig = false } = {}) {
   }
 }
 
-function startPolling() {
-  if (pollingTimer !== null) {
-    return;
-  }
-  pollingTimer = window.setInterval(() => {
-    void refreshSnapshot();
-  }, DISPLAY_REFRESH_INTERVAL_MS);
-}
-
 if (refreshBtn instanceof HTMLButtonElement) {
   refreshBtn.addEventListener("click", () => {
     void refreshSnapshot();
@@ -346,18 +423,13 @@ if (openSettingsBtn instanceof HTMLButtonElement) {
   });
 }
 
-if (simpleModeEl instanceof HTMLInputElement) {
-  simpleModeEl.addEventListener("change", async () => {
+if (debugCopyBtn instanceof HTMLButtonElement) {
+  debugCopyBtn.addEventListener("click", async () => {
     try {
-      const nextConfig = await persistDisplayConfig({ simpleMode: simpleModeEl.checked });
-      if (latestSnapshot) {
-        renderSnapshot(latestSnapshot, latestSnapshotRecordId, nextConfig);
-      }
-      setTextContent(statusEl, `简约模式已${simpleModeEl.checked ? "开启" : "关闭"}`, { mutedClass: DISPLAY_CLASS.muted });
+      await copyDebugText();
+      setTextContent(statusEl, "调试信息已复制", { mutedClass: DISPLAY_CLASS.muted });
     } catch (error) {
-      setTextContent(statusEl, `保存失败：${String(error?.message || error)}`, { mutedClass: DISPLAY_CLASS.muted });
-      cachedBridgeConfig = null;
-      await refreshSnapshot({ refreshConfig: true });
+      setTextContent(statusEl, `复制失败：${String(error?.message || error)}`, { mutedClass: DISPLAY_CLASS.muted });
     }
   });
 }
@@ -395,18 +467,5 @@ window.addEventListener("resize", () => {
   renderCurrentSnapshot();
 });
 
-window.addEventListener("focus", () => {
-  cachedBridgeConfig = null;
-  void refreshSnapshot();
-});
-
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    cachedBridgeConfig = null;
-    void refreshSnapshot();
-  }
-});
-
 void refreshSnapshot();
-startPolling();
 

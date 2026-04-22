@@ -64,7 +64,7 @@ async function run() {
     {
       capturedAt: 1713187200000,
       eventName: "game_update",
-      preview: '42["game_update",{"turn":2,"scores":[{"score":11,"dead":false},{"score":7,"dead":true}],"attackIndex":5,"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]',
+      preview: '42["game_update",{"turn":2,"scores":[{"total":11,"dead":false},{"total":7,"dead":true}],"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]',
       inMatch: true,
       matchId: "match-1",
       tabId: 8,
@@ -177,7 +177,7 @@ async function runLatestWinsTest() {
     return {
       capturedAt: 1713187200000 + turn,
       eventName: "game_update",
-      preview: `42["game_update",{"turn":${turn},"scores":[{"score":${turn},"dead":false}],"attackIndex":5,"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]`,
+      preview: `42["game_update",{"turn":${turn},"scores":[{"total":${turn},"dead":false}],"map_diff":[2,1,99,11],"cities_diff":[],"deserts_diff":[]}]`,
       inMatch: true,
       matchId: "match-throttle",
       tabId: 8,
